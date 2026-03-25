@@ -11,6 +11,7 @@ const tests = [
   {
     name: "diff detects text and attribute changes",
     run() {
+      // 같은 태그에서 텍스트와 속성이 동시에 바뀌면 둘 다 change로 잡히는지 검사합니다.
       const previous = {
         type: "fragment",
         children: [
@@ -43,6 +44,7 @@ const tests = [
   {
     name: "diff reports keyed move",
     run() {
+      // data-key가 있는 리스트 순서가 바뀌었을 때 remove/create가 아니라 move로 감지되는지 검사합니다.
       const previous = {
         type: "fragment",
         children: [
@@ -86,8 +88,50 @@ const tests = [
     },
   },
   {
+    name: "duplicate keys make keyed diff ambiguous",
+    run() {
+      // 같은 key가 여러 번 나오면 diff가 항목을 안정적으로 식별하지 못해 결과가 애매해질 수 있음을 드러냅니다.
+      const previous = {
+        type: "fragment",
+        children: [
+          {
+            type: "element",
+            tagName: "li",
+            attrs: { "data-key": "dup" },
+            children: [{ type: "text", value: "A" }],
+          },
+          {
+            type: "element",
+            tagName: "li",
+            attrs: { "data-key": "dup" },
+            children: [{ type: "text", value: "B" }],
+          },
+        ],
+      };
+
+      const next = {
+        type: "fragment",
+        children: [
+          {
+            type: "element",
+            tagName: "li",
+            attrs: { "data-key": "dup" },
+            children: [{ type: "text", value: "B" }],
+          },
+        ],
+      };
+
+      const changes = diffTrees(previous, next);
+      const hasMove = changes.some((change) => change.type === "MOVE_CHILD");
+      const hasRemove = changes.some((change) => change.type === "REMOVE_NODE");
+
+      assert(hasMove || hasRemove, "duplicate key case should expose unstable keyed diff output");
+    },
+  },
+  {
     name: "history truncates future entries after new commit",
     run() {
+      // undo 이후 새 상태를 push하면 예전 redo 경로가 잘려 나가는지 검사합니다.
       const history = createHistory({ type: "fragment", children: [] });
 
       history.push({ type: "fragment", children: [{ type: "text", value: "one" }] });
@@ -102,6 +146,7 @@ const tests = [
   {
     name: "store snapshots preserve previous vdom and change metadata",
     run() {
+      // history snapshot 안에 이전 VDOM, 현재 VDOM, diff 정보, mutation 수가 함께 보존되는지 검사합니다.
       const initial = { type: "fragment", children: [] };
       const next = { type: "fragment", children: [{ type: "text", value: "next" }] };
       const changes = [{ type: "CREATE", path: [0] }];
@@ -121,6 +166,7 @@ const tests = [
   {
     name: "serializeVdom produces readable HTML",
     run() {
+      // VDOM을 사람이 읽을 수 있는 HTML 문자열로 직렬화하는 기본 동작을 검사합니다.
       const html = serializeVdom({
         type: "fragment",
         children: [
@@ -142,6 +188,106 @@ const tests = [
 
       assert(html.includes('<section class="card">'), "section opening tag should exist");
       assert(html.includes("<h1>Title</h1>"), "heading should be serialized inline");
+    },
+  },
+  {
+    name: "diff replaces node when tag type changes at same path",
+    run() {
+      // 같은 위치의 태그가 button -> a처럼 바뀌면 속성 변경이 아니라 replace 한 번으로 잡히는지 검사합니다.
+      const previous = {
+        type: "fragment",
+        children: [
+          {
+            type: "element",
+            tagName: "button",
+            attrs: { type: "button", "data-role": "replace-target" },
+            children: [{ type: "text", value: "button" }],
+          },
+        ],
+      };
+
+      const next = {
+        type: "fragment",
+        children: [
+          {
+            type: "element",
+            tagName: "a",
+            attrs: { href: "#", "data-role": "replace-target" },
+            children: [{ type: "text", value: "link" }],
+          },
+        ],
+      };
+
+      const changes = diffTrees(previous, next);
+
+      assert(changes.length === 1, "tag replacement should collapse to a single replace change");
+      assert(changes[0].type === "REPLACE_NODE", "change type should be REPLACE_NODE");
+    },
+  },
+  {
+    name: "store getters return clones so external mutation does not leak back",
+    run() {
+      // store에서 꺼낸 객체를 바깥에서 수정해도 원본 상태가 오염되지 않는지 검사합니다.
+      const initial = {
+        type: "fragment",
+        children: [{ type: "text", value: "safe" }],
+      };
+      const store = createStore(initial);
+      const snapshot = store.getCurrentVdom();
+
+      snapshot.children[0].value = "mutated outside";
+
+      assert(
+        store.getCurrentVdom().children[0].value === "safe",
+        "current vdom should stay immutable from caller perspective",
+      );
+    },
+  },
+  {
+    name: "store undo and redo keep current and draft in sync",
+    run() {
+      // undo/redo 이후에는 actual 기준 상태와 draft 기준 상태가 다시 같은 값으로 맞춰지는지 검사합니다.
+      const initial = { type: "fragment", children: [{ type: "text", value: "start" }] };
+      const next = { type: "fragment", children: [{ type: "text", value: "after patch" }] };
+      const store = createStore(initial);
+
+      store.commit(next, [{ type: "UPDATE_TEXT", path: [0] }], 1);
+      store.undo();
+
+      assert(
+        store.getCurrentVdom().children[0].value === store.getDraftVdom().children[0].value,
+        "undo should resync current and draft",
+      );
+
+      store.redo();
+
+      assert(
+        store.getCurrentVdom().children[0].value === store.getDraftVdom().children[0].value,
+        "redo should resync current and draft",
+      );
+    },
+  },
+  {
+    name: "serializeVdom escapes text and attribute HTML characters",
+    run() {
+      // 직렬화할 때 <, >, &, 따옴표 같은 문자가 안전하게 escape되는지 검사합니다.
+      const html = serializeVdom({
+        type: "fragment",
+        children: [
+          {
+            type: "element",
+            tagName: "div",
+            attrs: { title: '"quoted" <unsafe> &' },
+            children: [{ type: "text", value: '5 < 7 & "safe"' }],
+          },
+        ],
+      });
+
+      assert(
+        html.includes('title="&quot;quoted&quot; &lt;unsafe&gt; &amp;"'),
+        "attribute should be escaped",
+      );
+      assert(html.includes('5 &lt; 7 &amp; "safe"'), "text should escape angle brackets and ampersands");
     },
   },
 ];

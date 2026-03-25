@@ -25,6 +25,9 @@ export function getElements() {
     htmlAfter: requiredElement("html-after"),
     htmlBeforeLabel: requiredElement("html-before-label"),
     htmlAfterLabel: requiredElement("html-after-label"),
+    htmlEditor: requiredElement("html-editor"),
+    htmlApplyButton: requiredElement("html-apply-button"),
+    htmlEditorStatus: requiredElement("html-editor-status"),
     testPreview: requiredElement("test-preview"),
     patchButton: requiredElement("patch-button"),
     undoButton: requiredElement("undo-button"),
@@ -76,6 +79,17 @@ export function renderTestPanel(elements, vdom) {
   renderVdom(elements.testPreview, vdom);
 }
 
+export function renderDraftSource(elements, vdom) {
+  // 현재 draft VDOM을 HTML 편집기 문자열로 보여줍니다.
+  elements.htmlEditor.value = serializeVdom(vdom);
+}
+
+export function renderHtmlEditorStatus(elements, message, state = "idle") {
+  // HTML 편집기의 현재 상태를 짧은 문구로 보여줍니다.
+  elements.htmlEditorStatus.textContent = message;
+  elements.htmlEditorStatus.dataset.state = state;
+}
+
 export function renderStatus(
   elements,
   store,
@@ -98,16 +112,8 @@ export function renderStatus(
 }
 
 export function renderChangeList(elements, changes) {
-  // diff 결과를 사람이 읽기 쉬운 문장 리스트로 보여줍니다.
-  const items = changes.length === 0 ? ["변경 없음"] : changes.map((change) => describeChange(change));
-
-  elements.changeList.replaceChildren(
-    ...items.map((message) => {
-      const item = document.createElement("li");
-      item.textContent = message;
-      return item;
-    }),
-  );
+  // diff 결과를 자바스크립트 코드처럼 읽히는 changes 배열 형태로 보여줍니다.
+  elements.changeList.textContent = serializeChangesAsCode(changes);
 }
 
 export function renderHtmlComparison(
@@ -197,6 +203,57 @@ function describeChange(change) {
     default:
       return `[UNKNOWN] ${path}`;
   }
+}
+
+function serializeChangesAsCode(changes) {
+  if (changes.length === 0) {
+    return "const changes = [];";
+  }
+
+  const normalized = changes.map((change) => normalizeChangeForCode(change));
+  return `const changes = ${JSON.stringify(normalized, null, 2)};`;
+}
+
+function normalizeChangeForCode(change) {
+  const normalized = {};
+
+  for (const [key, value] of Object.entries(change)) {
+    if (key === "prevNode" || key === "nextNode") {
+      normalized[key] = summarizeVNode(value);
+      continue;
+    }
+
+    normalized[key] = value;
+  }
+
+  return normalized;
+}
+
+function summarizeVNode(node) {
+  if (!node) {
+    return null;
+  }
+
+  if (node.type === "text") {
+    return {
+      type: "text",
+      value: node.value,
+    };
+  }
+
+  if (node.type === "fragment") {
+    return {
+      type: "fragment",
+      childCount: node.children?.length ?? 0,
+    };
+  }
+
+  return {
+    type: node.type,
+    tagName: node.tagName,
+    attrs: node.attrs ?? {},
+    childCount: node.children?.length ?? 0,
+  };
 }
 
 function toLines(serialized) {

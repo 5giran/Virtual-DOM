@@ -97,6 +97,28 @@
         </div>
       </section>
 
+      <section class="panel-card html-editor-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">HTML 편집</p>
+            <h2>코드로 바로 Patch</h2>
+          </div>
+          <div class="toolbar-actions">
+            <strong id="html-editor-status" class="editor-status" data-state="idle">대기 중</strong>
+            <button id="html-apply-button" type="button" class="action-button action-button--primary">
+              HTML로 Patch
+            </button>
+          </div>
+        </header>
+
+        <textarea
+          id="html-editor"
+          class="editor-surface"
+          spellcheck="false"
+          aria-label="Test HTML 편집기"
+        ></textarea>
+      </section>
+
       <section class="panel-card panel-card--compact support-panel log-panel">
         <header class="support-head">
           <div>
@@ -104,7 +126,7 @@
             <h2>변경 로그</h2>
           </div>
         </header>
-        <ol id="change-list" class="change-list"></ol>
+        <pre id="change-list" class="code-surface log-code" aria-live="polite"></pre>
       </section>
 
       <section class="history-panel">

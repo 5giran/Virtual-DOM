@@ -355,6 +355,13 @@ pre {
   overflow: auto;
 }
 
+.log-code {
+  max-height: 260px;
+  background: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+}
+
 .change-list,
 .check-list {
   margin: 0;
@@ -388,6 +395,39 @@ pre {
 
 .html-panel {
   margin-top: 12px;
+}
+
+.html-editor-panel {
+  margin-top: 12px;
+}
+
+.editor-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #2d2d2d;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.editor-status[data-state="success"] {
+  border-color: rgba(78, 201, 160, 0.35);
+  background: rgba(78, 201, 160, 0.12);
+  color: #9fe3c9;
+}
+
+.editor-status[data-state="error"] {
+  border-color: rgba(244, 135, 113, 0.35);
+  background: rgba(244, 135, 113, 0.12);
+  color: #ffb6aa;
+}
+
+.editor-surface[data-invalid="true"] {
+  border-color: rgba(244, 135, 113, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(244, 135, 113, 0.2);
 }
 
 .html-compare-grid {

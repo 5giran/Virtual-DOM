@@ -92,6 +92,14 @@ export function domToVdom(container) {
   };
 }
 
+export function htmlToVdom(input) {
+  // HTML 문자열을 sanitize한 뒤 VDOM으로 변환합니다.
+  const parser = new DOMParser();
+  const sanitized = sanitizeHtml(input ?? "");
+  const doc = parser.parseFromString(sanitized, "text/html");
+  return domToVdom(doc.body);
+}
+
 export function createDomFromVdom(vnode) {
   // VDOM 노드 하나를 실제 DOM 노드로 생성합니다.
   if (vnode.type === "fragment") {

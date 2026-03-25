@@ -18,14 +18,16 @@
 
 import { diffTrees } from "./core/diff.js";
 import { patchDom } from "./core/patch.js";
-import { domToVdom, getNodeKey, sanitizeHtml } from "./core/vdom.js";
+import { domToVdom, getNodeKey, htmlToVdom, sanitizeHtml } from "./core/vdom.js";
 import {
   createDomObserver,
   getElements,
   renderActualPreview,
   renderActualSource,
   renderChangeList,
+  renderDraftSource,
   renderHtmlComparison,
+  renderHtmlEditorStatus,
   renderStatus,
   renderTestPanel,
 } from "./ui/appUi.js";
@@ -36,6 +38,22 @@ const EDITABLE_SELECTOR = '[data-role="title"], [data-role="description"], .samp
 const TEXT_FALLBACK = "내용 없음";
 const THEME_CLASSES = ["theme-blue", "theme-emerald", "theme-amber"];
 const ITEM_KEY_CANDIDATES = ["delta", "epsilon", "zeta", "eta", "theta"];
+const HTML_VOID_TAGS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = getElements();
@@ -55,10 +73,15 @@ document.addEventListener("DOMContentLoaded", () => {
   syncEditModeButton(elements.editModeButton, uiState.isEditModeEnabled);
   renderTestDraft(elements, store, uiState.isEditModeEnabled);
   renderLiveState(elements, store, uiState);
+  syncHtmlEditorValidation(elements, { shouldShowReady: true });
 });
 
 function bindToolbarEvents(elements, store, observer, uiState) {
   // 상단 버튼(Patch / Undo / Redo / 편집 모드)의 동작을 한곳에서 묶습니다.
+  elements.htmlEditor.addEventListener("input", () => {
+    syncHtmlEditorValidation(elements, { shouldShowReady: true });
+  });
+
   elements.editModeButton.addEventListener("click", () => {
     uiState.isEditModeEnabled = !uiState.isEditModeEnabled;
     syncEditModeButton(elements.editModeButton, uiState.isEditModeEnabled);
@@ -68,33 +91,33 @@ function bindToolbarEvents(elements, store, observer, uiState) {
   elements.patchButton.addEventListener("click", () => {
     const previousVdom = store.getCurrentVdom();
     const nextVdom = store.getDraftVdom();
-    const changes = diffTrees(previousVdom, nextVdom);
-
-    if (changes.length === 0) {
-      store.inspect([], 0);
-      uiState.isDirty = false;
-      clearHistoryInspection(elements, uiState);
-      renderLiveState(elements, store, uiState, []);
-      return;
-    }
-
-    patchDom(elements.actualPreview, previousVdom, nextVdom);
-    const mutationCount = observer.flush();
-
-    store.commitDraft(changes, mutationCount);
-    renderActualSource(elements, nextVdom);
-    renderTestDraft(elements, store, uiState.isEditModeEnabled);
-
-    uiState.isDirty = false;
-    clearHistoryInspection(elements, uiState);
-    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
-    renderChangeList(elements, changes);
-    renderHtmlComparison(elements, {
+    const didCommit = commitPatchedVdom(elements, store, observer, uiState, {
       beforeVdom: previousVdom,
       afterVdom: nextVdom,
       beforeLabel: "Patch 전 HTML",
       afterLabel: "Patch 후 HTML",
     });
+
+    if (didCommit) {
+      renderHtmlEditorStatus(elements, "Patch 완료", "success");
+    }
+  });
+
+  elements.htmlApplyButton.addEventListener("click", () => {
+    const previousVdom = store.getCurrentVdom();
+    const nextVdom = htmlToVdom(elements.htmlEditor.value);
+
+    store.setDraftVdom(nextVdom);
+    const didCommit = commitPatchedVdom(elements, store, observer, uiState, {
+      beforeVdom: previousVdom,
+      afterVdom: nextVdom,
+      beforeLabel: "HTML 적용 전",
+      afterLabel: "HTML 적용 후",
+    });
+
+    if (didCommit) {
+      renderHtmlEditorStatus(elements, "HTML 코드가 실제 DOM에 반영됨", "success");
+    }
   });
 
   elements.undoButton.addEventListener("click", () => {
@@ -117,12 +140,14 @@ function bindToolbarEvents(elements, store, observer, uiState) {
     clearHistoryInspection(elements, uiState);
     renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
     renderChangeList(elements, changes);
+    renderDraftSource(elements, previousVdom);
     renderHtmlComparison(elements, {
       beforeVdom: currentVdom,
       afterVdom: previousVdom,
       beforeLabel: "Undo 전 HTML",
       afterLabel: "Undo 결과 HTML",
     });
+    renderHtmlEditorStatus(elements, "Undo로 HTML 편집기가 동기화됨", "idle");
   });
 
   elements.redoButton.addEventListener("click", () => {
@@ -145,12 +170,14 @@ function bindToolbarEvents(elements, store, observer, uiState) {
     clearHistoryInspection(elements, uiState);
     renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
     renderChangeList(elements, changes);
+    renderDraftSource(elements, nextVdom);
     renderHtmlComparison(elements, {
       beforeVdom: currentVdom,
       afterVdom: nextVdom,
       beforeLabel: "Redo 전 HTML",
       afterLabel: "Redo 결과 HTML",
     });
+    renderHtmlEditorStatus(elements, "Redo로 HTML 편집기가 동기화됨", "idle");
   });
 }
 
@@ -216,6 +243,7 @@ function createInitialVdom(elements) {
   renderActualPreview(elements, initialVdom);
   renderActualSource(elements, initialVdom);
   renderTestPanel(elements, initialVdom);
+  renderDraftSource(elements, initialVdom);
   renderHtmlComparison(elements, {
     beforeVdom: initialVdom,
     afterVdom: initialVdom,
@@ -239,6 +267,8 @@ function renderLiveState(elements, store, uiState, liveChanges = null) {
   const pendingChanges = liveChanges ?? diffTrees(currentVdom, draftVdom);
   const displayChanges = uiState.isDirty ? pendingChanges : store.getLastChanges();
 
+  renderDraftSource(elements, draftVdom);
+  syncHtmlEditorValidation(elements);
   renderStatus(
     elements,
     store,
@@ -253,6 +283,37 @@ function renderLiveState(elements, store, uiState, liveChanges = null) {
     beforeLabel: "현재 Actual HTML",
     afterLabel: "현재 Test HTML",
   });
+}
+
+function commitPatchedVdom(elements, store, observer, uiState, comparisonOptions) {
+  // draftVdom을 실제 DOM에 반영하고, history / 로그 / HTML 패널을 한 번에 갱신합니다.
+  const previousVdom = comparisonOptions.beforeVdom;
+  const nextVdom = comparisonOptions.afterVdom;
+  const changes = diffTrees(previousVdom, nextVdom);
+
+  if (changes.length === 0) {
+    store.inspect([], 0);
+    uiState.isDirty = false;
+    clearHistoryInspection(elements, uiState);
+    renderLiveState(elements, store, uiState, []);
+    renderHtmlEditorStatus(elements, "변경 사항이 없음", "idle");
+    return false;
+  }
+
+  patchDom(elements.actualPreview, previousVdom, nextVdom);
+  const mutationCount = observer.flush();
+
+  store.commitDraft(changes, mutationCount);
+  renderActualSource(elements, nextVdom);
+  renderTestDraft(elements, store, uiState.isEditModeEnabled);
+
+  uiState.isDirty = false;
+  clearHistoryInspection(elements, uiState);
+  renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
+  renderChangeList(elements, changes);
+  renderDraftSource(elements, nextVdom);
+  renderHtmlComparison(elements, comparisonOptions);
+  return true;
 }
 
 function syncDraftChange(elements, store, uiState, shouldRerenderTest) {
@@ -664,4 +725,125 @@ function syncHistoryInspection(elements, inspectedIndex) {
   }
 
   delete elements.historyTrack.dataset.inspectingIndex;
+}
+
+function syncHtmlEditorValidation(elements, { shouldShowReady = false } = {}) {
+  // HTML 편집기 내용을 검사해서 적용 버튼 활성화와 상태 문구를 맞춥니다.
+  const validation = validateHtmlEditorInput(elements.htmlEditor.value);
+  const previousState = elements.htmlEditorStatus.dataset.state ?? "idle";
+
+  elements.htmlApplyButton.disabled = !validation.isValid;
+  elements.htmlEditor.dataset.invalid = validation.isValid ? "false" : "true";
+  elements.htmlEditor.setAttribute("aria-invalid", String(!validation.isValid));
+
+  if (!validation.isValid) {
+    renderHtmlEditorStatus(elements, validation.message, "error");
+    return validation;
+  }
+
+  if (shouldShowReady || previousState === "error") {
+    renderHtmlEditorStatus(elements, "HTML 적용 가능", "idle");
+  }
+
+  return validation;
+}
+
+function validateHtmlEditorInput(input) {
+  // VS Code급 문법 검사 대신, patch 전에 막아야 하는 명백한 구조 문제를 빠르게 검사합니다.
+  const source = (input ?? "").trim();
+
+  if (!source) {
+    return {
+      isValid: false,
+      message: "HTML이 비어 있어서 적용할 수 없음",
+    };
+  }
+
+  const structureValidation = validateHtmlTagStructure(source);
+
+  if (!structureValidation.isValid) {
+    return structureValidation;
+  }
+
+  const sanitized = sanitizeHtml(source);
+
+  if (!sanitized) {
+    return {
+      isValid: false,
+      message: "sanitize 후 남는 HTML이 없음",
+    };
+  }
+
+  const duplicateKeys = findDuplicateDataKeys(sanitized);
+
+  if (duplicateKeys.length > 0) {
+    return {
+      isValid: false,
+      message: `중복 data-key 감지: ${duplicateKeys.join(", ")}`,
+    };
+  }
+
+  return {
+    isValid: true,
+    message: "HTML 적용 가능",
+  };
+}
+
+function validateHtmlTagStructure(source) {
+  // 열린 태그/닫는 태그의 기본 짝이 맞는지 스택으로 확인합니다.
+  const tagPattern = /<\/?([a-zA-Z][\w:-]*)\b[^>]*>/g;
+  const stack = [];
+
+  for (const match of source.matchAll(tagPattern)) {
+    const [fullMatch, rawTagName] = match;
+    const tagName = rawTagName.toLowerCase();
+    const isClosing = fullMatch.startsWith("</");
+    const isSelfClosing = fullMatch.endsWith("/>") || HTML_VOID_TAGS.has(tagName);
+
+    if (isClosing) {
+      const expectedTag = stack.pop();
+
+      if (expectedTag !== tagName) {
+        return {
+          isValid: false,
+          message: `태그 짝이 맞지 않음: </${tagName}>`,
+        };
+      }
+
+      continue;
+    }
+
+    if (!isSelfClosing) {
+      stack.push(tagName);
+    }
+  }
+
+  if (stack.length > 0) {
+    return {
+      isValid: false,
+      message: `닫히지 않은 태그가 있음: <${stack[stack.length - 1]}>`,
+    };
+  }
+
+  return {
+    isValid: true,
+    message: "태그 구조 정상",
+  };
+}
+
+function findDuplicateDataKeys(html) {
+  // 같은 data-key가 여러 번 나오면 keyed diff가 불안정해지므로 patch 전에 차단합니다.
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+
+  const counts = new Map();
+
+  wrapper.querySelectorAll("[data-key]").forEach((node) => {
+    const key = node.getAttribute("data-key") ?? "";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .filter(([, count]) => count > 1)
+    .map(([key]) => key);
 }
