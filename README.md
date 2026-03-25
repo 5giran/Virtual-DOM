@@ -15,14 +15,43 @@
 Patch 버튼을 누르면 `currentVdom`과 `draftVdom`을 비교하여  
 변경된 부분만 Actual DOM에 반영합니다.
 
-## 핵심 아이디어
+## 프로젝트 구조
 
-이 프로젝트는 실제 DOM을 직접 계속 수정하는 대신,  
-메모리 안에서 Virtual DOM 상태를 관리한 뒤,  
-두 상태의 차이를 계산해서 필요한 부분만 실제 DOM에 반영합니다.
-
-즉, 전체를 다시 그리는 것이 아니라  
-"무엇이 바뀌었는지 먼저 계산하고, 그 부분만 업데이트"하는 흐름을 구현했습니다.
+```text
+virtualDOM/
+├── public/
+│   ├── index.html
+│   └── tests.html
+├── styles/
+│   └── main.css
+├── src/
+│   ├── main.js
+│   ├── sampleMarkup.js
+│   ├── core/
+│   │   ├── README.md
+│   │   ├── vdom.js
+│   │   ├── diff.js
+│   │   └── patch.js
+│   ├── state/
+│   │   ├── README.md
+│   │   └── store.js
+│   └── ui/
+│       ├── README.md
+│       └── appUi.js
+├── tests/
+│   ├── node-logic-tests.js
+│   └── runTests.js
+├── package.json
+└── README.md
+```
+## 폴더 역할 한 줄 정리
+- public: 브라우저에서 직접 여는 HTML 파일
+- styles: 전체 화면 스타일
+- src: 실제 앱 코드
+- src/core: Virtual DOM / diff / patch 핵심 알고리즘
+- src/state: 상태, history, undo/redo 관리
+- src/ui: 화면 렌더링과 DOM 연결
+- tests: 테스트 코드
 
 ## 동작 흐름
 
