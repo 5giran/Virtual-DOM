@@ -1,10 +1,11 @@
 /**
  * 역할:
- * - 현재 Virtual DOM 상태와 history(undo/redo)를 함께 관리합니다.
+ * - 현재 실제 상태 Virtual DOM과 테스트용 draft Virtual DOM을 함께 관리합니다.
  * - 마지막 diff 결과와 실제 DOM mutation 개수도 같이 저장해서 UI가 바로 읽을 수 있게 합니다.
  *
  * 이 파일을 읽어야 하는 경우:
  * - Patch 이후 어떤 상태가 저장되는지 알고 싶을 때
+ * - 실제 상태(actual)와 테스트 상태(draft)가 어떻게 분리되는지 보고 싶을 때
  * - undo / redo가 어떤 기준으로 움직이는지 확인하고 싶을 때
  *
  * 관련 파일:
@@ -17,12 +18,25 @@ import { cloneVdom } from "../core/vdom.js";
 export function createStore(initialVdom) {
   const history = createHistory(initialVdom);
   let currentVdom = cloneVdom(initialVdom);
+  let draftVdom = cloneVdom(initialVdom);
   let lastChanges = [];
   let lastMutationCount = 0;
 
   return {
     getCurrentVdom() {
       return cloneVdom(currentVdom);
+    },
+
+    getDraftVdom() {
+      return cloneVdom(draftVdom);
+    },
+
+    setDraftVdom(nextVdom) {
+      draftVdom = cloneVdom(nextVdom);
+    },
+
+    resetDraftVdom() {
+      draftVdom = cloneVdom(currentVdom);
     },
 
     getLastChanges() {
@@ -37,9 +51,9 @@ export function createStore(initialVdom) {
       return history.snapshotAt(index);
     },
 
-    commit(nextVdom, changes, mutationCount) {
+    commitDraft(changes, mutationCount) {
       const previousVdom = cloneVdom(currentVdom);
-      currentVdom = cloneVdom(nextVdom);
+      currentVdom = cloneVdom(draftVdom);
       history.push({
         vdom: currentVdom,
         previousVdom,
@@ -48,6 +62,16 @@ export function createStore(initialVdom) {
       });
       lastChanges = [...changes];
       lastMutationCount = mutationCount;
+
+      return {
+        previousVdom,
+        currentVdom: cloneVdom(currentVdom),
+      };
+    },
+
+    commit(nextVdom, changes, mutationCount) {
+      draftVdom = cloneVdom(nextVdom);
+      return this.commitDraft(changes, mutationCount);
     },
 
     inspect(changes, mutationCount) {
@@ -63,6 +87,7 @@ export function createStore(initialVdom) {
       }
 
       currentVdom = cloneVdom(previous);
+      draftVdom = cloneVdom(previous);
       lastChanges = [];
       lastMutationCount = 0;
       return cloneVdom(currentVdom);
@@ -76,6 +101,7 @@ export function createStore(initialVdom) {
       }
 
       currentVdom = cloneVdom(next);
+      draftVdom = cloneVdom(next);
       lastChanges = [];
       lastMutationCount = 0;
       return cloneVdom(currentVdom);

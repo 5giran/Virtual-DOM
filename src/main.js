@@ -1,24 +1,24 @@
 /**
  * 역할:
  * - 앱의 시작점입니다.
- * - Patch / Undo / Redo 이벤트를 묶고, 테스트 영역 편집 흐름을 연결합니다.
- * - 처음 읽는 팀원이 "이 프로젝트가 어떻게 움직이는지" 가장 먼저 보기 좋은 파일입니다.
+ * - actualVdom(실제 영역 상태)과 draftVdom(테스트 영역 상태)을 나눠서 관리합니다.
+ * - Patch / Undo / Redo / 편집 모드 흐름을 한 파일에서 따라갈 수 있게 정리했습니다.
  *
  * 이 파일을 읽어야 하는 경우:
- * - 전체 실행 흐름을 빠르게 파악하고 싶을 때
- * - 버튼을 누르면 어떤 순서로 DOM -> VDOM -> Diff -> Patch가 일어나는지 보고 싶을 때
+ * - 이 프로젝트가 어떤 순서로 동작하는지 전체 흐름부터 보고 싶을 때
+ * - "왜 이제는 테스트 DOM을 다시 읽지 않고 draftVdom을 기준으로 비교하는지" 이해하고 싶을 때
  *
  * 관련 파일:
- * - ./ui/appUi.js: 화면 렌더링과 DOM 요소 연결
- * - ./core/vdom.js: DOM <-> Virtual DOM 변환
- * - ./core/diff.js: 이전/새 Virtual DOM 비교
- * - ./core/patch.js: 실제 DOM 반영
- * - ./state/store.js: history, undo/redo 상태 관리
+ * - ./state/store.js: actualVdom / draftVdom / history를 저장합니다.
+ * - ./core/vdom.js: 초기 DOM -> VDOM 변환과 VDOM 렌더링을 담당합니다.
+ * - ./core/diff.js: actualVdom 과 draftVdom 의 차이를 계산합니다.
+ * - ./core/patch.js: 실제 DOM에는 필요한 부분만 반영합니다.
+ * - ./ui/appUi.js: 화면 렌더링과 상태 표시를 담당합니다.
  */
 
 import { diffTrees } from "./core/diff.js";
 import { patchDom } from "./core/patch.js";
-import { domToVdom, sanitizeHtml } from "./core/vdom.js";
+import { domToVdom, getNodeKey, sanitizeHtml } from "./core/vdom.js";
 import {
   createDomObserver,
   getElements,
@@ -32,179 +32,179 @@ import {
 import { createStore } from "./state/store.js";
 import { sampleMarkup } from "./sampleMarkup.js";
 
-const EDITABLE_FIELD_SELECTOR = ['[data-role="title"]', '[data-role="description"]', ".sample-value"].join(
-  ", ",
-);
+const EDITABLE_SELECTOR = '[data-role="title"], [data-role="description"], .sample-value';
+const TEXT_FALLBACK = "내용 없음";
+const THEME_CLASSES = ["theme-blue", "theme-emerald", "theme-amber"];
+const ITEM_KEY_CANDIDATES = ["delta", "epsilon", "zeta", "eta", "theta"];
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = getElements();
-  const editModeButton = requiredElement("edit-mode-button");
   const initialVdom = createInitialVdom(elements);
   const store = createStore(initialVdom);
   const observer = createDomObserver(elements.actualPreview);
-  let isDirty = false;
-  let isEditModeEnabled = false;
-  let inspectedHistoryIndex = null;
+  const uiState = {
+    isDirty: false,
+    isEditModeEnabled: false,
+    inspectedHistoryIndex: null,
+  };
 
-  setupTestPreviewEditor(
-    elements,
-    store,
-    () => {
-      isDirty = true;
-      clearHistoryInspection();
-      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-    },
-    () => isEditModeEnabled,
-  );
-  syncEditModeButton(editModeButton, isEditModeEnabled);
-  decorateTestPreview(elements, isEditModeEnabled);
+  bindToolbarEvents(elements, store, observer, uiState);
+  bindTestPanelEvents(elements, store, uiState);
 
   observer.flush();
-  renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-  renderChangeList(elements, store.getLastChanges());
-  syncDraftPanels(elements, store);
+  syncEditModeButton(elements.editModeButton, uiState.isEditModeEnabled);
+  renderTestDraft(elements, store, uiState.isEditModeEnabled);
+  renderLiveState(elements, store, uiState);
+});
 
-  editModeButton.addEventListener("click", () => {
-    isEditModeEnabled = !isEditModeEnabled;
-    syncEditModeButton(editModeButton, isEditModeEnabled);
-    decorateTestPreview(elements, isEditModeEnabled);
+function bindToolbarEvents(elements, store, observer, uiState) {
+  elements.editModeButton.addEventListener("click", () => {
+    uiState.isEditModeEnabled = !uiState.isEditModeEnabled;
+    syncEditModeButton(elements.editModeButton, uiState.isEditModeEnabled);
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
   });
 
   elements.patchButton.addEventListener("click", () => {
-    const nextVdom = createDraftVdom(elements.testPreview);
     const previousVdom = store.getCurrentVdom();
+    const nextVdom = store.getDraftVdom();
     const changes = diffTrees(previousVdom, nextVdom);
 
     if (changes.length === 0) {
       store.inspect([], 0);
-      isDirty = false;
-      clearHistoryInspection();
-      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-      renderChangeList(elements, []);
-      renderHtmlComparison(elements, {
-        beforeVdom: previousVdom,
-        afterVdom: nextVdom,
-        beforeLabel: "현재 Actual HTML",
-        afterLabel: "현재 Test HTML",
-      });
+      uiState.isDirty = false;
+      clearHistoryInspection(elements, uiState);
+      renderLiveState(elements, store, uiState, []);
       return;
     }
 
     patchDom(elements.actualPreview, previousVdom, nextVdom);
     const mutationCount = observer.flush();
 
-    store.commit(nextVdom, changes, mutationCount);
+    store.commitDraft(changes, mutationCount);
     renderActualSource(elements, nextVdom);
-    renderTestPanel(elements, nextVdom);
-    decorateTestPreview(elements, isEditModeEnabled);
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
+
+    uiState.isDirty = false;
+    clearHistoryInspection(elements, uiState);
+    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
+    renderChangeList(elements, changes);
     renderHtmlComparison(elements, {
       beforeVdom: previousVdom,
       afterVdom: nextVdom,
       beforeLabel: "Patch 전 HTML",
       afterLabel: "Patch 후 HTML",
     });
-
-    isDirty = false;
-    clearHistoryInspection();
-    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-    renderChangeList(elements, changes);
   });
 
   elements.undoButton.addEventListener("click", () => {
-    const currentState = store.getCurrentVdom();
-    const previousState = store.undo();
+    const currentVdom = store.getCurrentVdom();
+    const previousVdom = store.undo();
 
-    if (!previousState) {
+    if (!previousVdom) {
       return;
     }
 
-    patchDom(elements.actualPreview, domToVdom(elements.actualPreview), previousState);
-    const changes = diffTrees(currentState, previousState);
+    patchDom(elements.actualPreview, currentVdom, previousVdom);
+    const changes = diffTrees(currentVdom, previousVdom);
     const mutationCount = observer.flush();
+
     store.inspect(changes, mutationCount);
-    renderActualSource(elements, previousState);
-    renderTestPanel(elements, previousState);
-    decorateTestPreview(elements, isEditModeEnabled);
+    renderActualSource(elements, previousVdom);
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
+
+    uiState.isDirty = false;
+    clearHistoryInspection(elements, uiState);
+    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
+    renderChangeList(elements, changes);
     renderHtmlComparison(elements, {
-      beforeVdom: currentState,
-      afterVdom: previousState,
+      beforeVdom: currentVdom,
+      afterVdom: previousVdom,
       beforeLabel: "Undo 전 HTML",
       afterLabel: "Undo 결과 HTML",
     });
-
-    isDirty = false;
-    clearHistoryInspection();
-    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-    renderChangeList(elements, changes);
   });
 
   elements.redoButton.addEventListener("click", () => {
-    const currentState = store.getCurrentVdom();
-    const nextState = store.redo();
+    const currentVdom = store.getCurrentVdom();
+    const nextVdom = store.redo();
 
-    if (!nextState) {
+    if (!nextVdom) {
       return;
     }
 
-    patchDom(elements.actualPreview, domToVdom(elements.actualPreview), nextState);
-    const changes = diffTrees(currentState, nextState);
+    patchDom(elements.actualPreview, currentVdom, nextVdom);
+    const changes = diffTrees(currentVdom, nextVdom);
     const mutationCount = observer.flush();
+
     store.inspect(changes, mutationCount);
-    renderActualSource(elements, nextState);
-    renderTestPanel(elements, nextState);
-    decorateTestPreview(elements, isEditModeEnabled);
+    renderActualSource(elements, nextVdom);
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
+
+    uiState.isDirty = false;
+    clearHistoryInspection(elements, uiState);
+    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), changes);
+    renderChangeList(elements, changes);
     renderHtmlComparison(elements, {
-      beforeVdom: currentState,
-      afterVdom: nextState,
+      beforeVdom: currentVdom,
+      afterVdom: nextVdom,
       beforeLabel: "Redo 전 HTML",
       afterLabel: "Redo 결과 HTML",
     });
+  });
+}
 
-    isDirty = false;
-    clearHistoryInspection();
-    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-    renderChangeList(elements, changes);
+function bindTestPanelEvents(elements, store, uiState) {
+  elements.testPreview.addEventListener("click", (event) => {
+    const control = event.target.closest("[data-editor-control][data-action]");
+
+    if (!control) {
+      return;
+    }
+
+    event.preventDefault();
+
+    updateDraftVdom(store, (draftVdom) => {
+      runDraftAction(draftVdom, control.dataset.action, control.dataset.key);
+    });
+
+    syncDraftChange(elements, store, uiState, true);
   });
 
-  function handleHistoryNodeClick(index) {
-    const snapshot = store.getSnapshotAt(index);
-
-    if (!snapshot) {
+  elements.testPreview.addEventListener("input", (event) => {
+    if (!uiState.isEditModeEnabled) {
       return;
     }
 
-    const historyMeta = store.getHistoryMeta();
+    const target = event.target.closest(EDITABLE_SELECTOR);
 
-    if (index === historyMeta.index) {
-      clearHistoryInspection();
-      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-      renderChangeList(elements, store.getLastChanges());
-      renderHtmlComparison(elements, {
-        beforeVdom: snapshot.previousVdom,
-        afterVdom: snapshot.vdom,
-        beforeLabel: "현재 Actual HTML",
-        afterLabel: "현재 Test HTML",
-      });
+    if (!target) {
       return;
     }
 
-    inspectedHistoryIndex = index;
-    syncHistoryInspection(elements, inspectedHistoryIndex);
-    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
-    renderChangeList(elements, snapshot.changes);
-    renderHtmlComparison(elements, {
-      beforeVdom: snapshot.previousVdom,
-      afterVdom: snapshot.vdom,
-      beforeLabel: `[${index + 1}] 이전 HTML`,
-      afterLabel: `[${index + 1}] 변경 후 HTML`,
-    });
-  }
+    updateDraftTextFromTarget(store, target, false);
+    syncDraftChange(elements, store, uiState, false);
+  });
 
-  function clearHistoryInspection() {
-    inspectedHistoryIndex = null;
-    syncHistoryInspection(elements, inspectedHistoryIndex);
-  }
-});
+  elements.testPreview.addEventListener(
+    "focusout",
+    (event) => {
+      if (!uiState.isEditModeEnabled) {
+        return;
+      }
+
+      const target = event.target.closest(EDITABLE_SELECTOR);
+
+      if (!target) {
+        return;
+      }
+
+      target.textContent = normalizeText(target.textContent);
+      updateDraftTextFromTarget(store, target, true);
+      syncDraftChange(elements, store, uiState, true);
+    },
+    true,
+  );
+}
 
 function createInitialVdom(elements) {
   elements.actualPreview.innerHTML = sanitizeHtml(sampleMarkup);
@@ -223,150 +223,173 @@ function createInitialVdom(elements) {
   return initialVdom;
 }
 
-function setupTestPreviewEditor(elements, store, onDirty, getEditMode) {
-  elements.testPreview.addEventListener("click", (event) => {
-    const control = event.target.closest("[data-editor-control][data-action]");
-
-    if (!control) {
-      return;
-    }
-
-    event.preventDefault();
-
-    withDraftRoot(elements.testPreview, (root) => {
-      handleEditorAction(root, control.dataset.action, control, elements, store, onDirty, getEditMode);
-    });
-  });
-
-  elements.testPreview.addEventListener(
-    "keydown",
-    (event) => {
-      const target = event.target.closest("[data-editor-editing='true']");
-
-      if (!target) {
-        return;
-      }
-
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        target.blur();
-      }
-    },
-    true,
-  );
-
-  elements.testPreview.addEventListener(
-    "focusout",
-    (event) => {
-      const target = event.target.closest("[data-editor-editing='true']");
-
-      if (!target) {
-        return;
-      }
-
-      finishInlineEdit(target);
-      if (getEditMode()) {
-        setTestPreviewEditMode(elements.testPreview, true);
-      }
-      syncDraftPanels(elements, store);
-      onDirty();
-    },
-    true,
-  );
+function renderTestDraft(elements, store, isEditModeEnabled) {
+  renderTestPanel(elements, store.getDraftVdom());
+  decorateTestPreview(elements, isEditModeEnabled);
 }
 
-function handleEditorAction(root, action, control, elements, store, onDirty, getEditMode) {
-  switch (action) {
-    case "toggle-color":
-      toggleTheme(root);
-      break;
-    case "toggle-replace":
-      toggleReplaceTarget(root);
-      break;
-    case "add-item":
-      addListItem(root);
-      break;
-    case "delete-item":
-      control.closest("li")?.remove();
-      break;
-    case "move-up":
-      moveListItem(control.closest("li"), -1);
-      break;
-    case "move-down":
-      moveListItem(control.closest("li"), 1);
-      break;
-    default:
-      return;
-  }
-
-  decorateTestPreview(elements, getEditMode());
-  syncDraftPanels(elements, store);
-  onDirty();
-}
-
-function withDraftRoot(container, callback) {
-  const root = container.firstElementChild;
-
-  if (!root) {
-    return;
-  }
-
-  callback(root);
-}
-
-function decorateTestPreview(elements, isEditModeEnabled = false) {
-  withDraftRoot(elements.testPreview, (root) => {
-    root.querySelectorAll("[data-editor-control]").forEach((node) => node.remove());
-
-    const list = root.querySelector(".sample-list");
-    const row = root.querySelector(".sample-row");
-
-    if (!isEditModeEnabled) {
-      return;
-    }
-
-    if (row) {
-      row.append(
-        createControlGroup(
-          [createControlButton("색상 변경", "toggle-color"), createControlButton("태그 교체", "toggle-replace")],
-          "editor-controls--row",
-        ),
-      );
-    }
-
-    if (list) {
-      Array.from(list.children).forEach((item) => {
-        item.append(
-          createControlGroup(
-            [
-              createControlButton("삭제", "delete-item"),
-              createControlButton("위로", "move-up"),
-              createControlButton("아래로", "move-down"),
-            ],
-            "editor-controls--item",
-          ),
-        );
-      });
-
-      list.after(
-        createControlGroup([createControlButton("항목 추가", "add-item")], "editor-controls--footer"),
-      );
-    }
-  });
-
-  setTestPreviewEditMode(elements.testPreview, isEditModeEnabled);
-}
-
-function syncDraftPanels(elements, store) {
+function renderLiveState(elements, store, uiState, liveChanges = null) {
   const currentVdom = store.getCurrentVdom();
-  const draftVdom = createDraftVdom(elements.testPreview);
+  const draftVdom = store.getDraftVdom();
+  const pendingChanges = liveChanges ?? diffTrees(currentVdom, draftVdom);
+  const displayChanges = uiState.isDirty ? pendingChanges : store.getLastChanges();
 
+  renderStatus(
+    elements,
+    store,
+    uiState.isDirty,
+    createHistoryClickHandler(elements, store, uiState),
+    displayChanges,
+  );
+  renderChangeList(elements, displayChanges);
   renderHtmlComparison(elements, {
     beforeVdom: currentVdom,
     afterVdom: draftVdom,
     beforeLabel: "현재 Actual HTML",
     afterLabel: "현재 Test HTML",
   });
+}
+
+function syncDraftChange(elements, store, uiState, shouldRerenderTest) {
+  const liveChanges = diffTrees(store.getCurrentVdom(), store.getDraftVdom());
+
+  uiState.isDirty = liveChanges.length > 0;
+  clearHistoryInspection(elements, uiState);
+
+  if (shouldRerenderTest) {
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
+  }
+
+  renderLiveState(elements, store, uiState, liveChanges);
+}
+
+function createHistoryClickHandler(elements, store, uiState) {
+  return (index) => {
+    const snapshot = store.getSnapshotAt(index);
+
+    if (!snapshot) {
+      return;
+    }
+
+    const currentIndex = store.getHistoryMeta().index;
+
+    if (index === currentIndex) {
+      clearHistoryInspection(elements, uiState);
+      renderLiveState(elements, store, uiState);
+      return;
+    }
+
+    uiState.inspectedHistoryIndex = index;
+    syncHistoryInspection(elements, uiState.inspectedHistoryIndex);
+    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), snapshot.changes);
+    renderChangeList(elements, snapshot.changes);
+    renderHtmlComparison(elements, {
+      beforeVdom: snapshot.previousVdom,
+      afterVdom: snapshot.vdom,
+      beforeLabel: `[${index + 1}] 이전 HTML`,
+      afterLabel: `[${index + 1}] 변경 후 HTML`,
+    });
+  };
+}
+
+function updateDraftVdom(store, updater) {
+  const nextDraft = store.getDraftVdom();
+  updater(nextDraft);
+  store.setDraftVdom(nextDraft);
+}
+
+function updateDraftTextFromTarget(store, target, useNormalizedText) {
+  const nextDraft = store.getDraftVdom();
+  const nextText = useNormalizedText ? normalizeText(target.textContent) : target.textContent ?? "";
+  const role = target.dataset.role;
+
+  if (role === "title" || role === "description") {
+    setNodeText(findNodeByRole(nextDraft, role), nextText || TEXT_FALLBACK);
+    store.setDraftVdom(nextDraft);
+    return;
+  }
+
+  if (target.classList.contains("sample-value")) {
+    const itemKey = target.closest("li")?.dataset.key ?? "";
+    const itemNode = findListItemByKey(nextDraft, itemKey);
+    const valueNode = findNodeByClass(itemNode, "sample-value");
+
+    setNodeText(valueNode, nextText || TEXT_FALLBACK);
+    store.setDraftVdom(nextDraft);
+  }
+}
+
+function runDraftAction(draftVdom, action, itemKey = "") {
+  switch (action) {
+    case "toggle-color":
+      toggleDraftTheme(draftVdom);
+      return;
+    case "toggle-replace":
+      toggleDraftReplaceTarget(draftVdom);
+      return;
+    case "add-item":
+      addDraftListItem(draftVdom);
+      return;
+    case "delete-item":
+      deleteDraftListItem(draftVdom, itemKey);
+      return;
+    case "move-up":
+      moveDraftListItem(draftVdom, itemKey, -1);
+      return;
+    case "move-down":
+      moveDraftListItem(draftVdom, itemKey, 1);
+      return;
+    default:
+  }
+}
+
+function decorateTestPreview(elements, isEditModeEnabled) {
+  const root = elements.testPreview.firstElementChild;
+
+  if (!root) {
+    return;
+  }
+
+  root.querySelectorAll("[data-editor-control]").forEach((node) => node.remove());
+  setEditableFields(elements.testPreview, isEditModeEnabled);
+
+  if (!isEditModeEnabled) {
+    return;
+  }
+
+  const list = root.querySelector(".sample-list");
+  const row = root.querySelector(".sample-row");
+
+  if (row) {
+    row.append(
+      createControlGroup(
+        [
+          createControlButton("색상 변경", "toggle-color"),
+          createControlButton("태그 교체", "toggle-replace"),
+        ],
+        "editor-controls--row",
+      ),
+    );
+  }
+
+  if (list) {
+    Array.from(list.children).forEach((item) => {
+      const itemKey = item.getAttribute("data-key") ?? "";
+
+      item.append(
+        createControlGroup(
+          [
+            createControlButton("삭제", "delete-item", itemKey),
+            createControlButton("위로", "move-up", itemKey),
+            createControlButton("아래로", "move-down", itemKey),
+          ],
+          "editor-controls--item",
+        ),
+      );
+    });
+
+    list.after(createControlGroup([createControlButton("항목 추가", "add-item")], "editor-controls--footer"));
+  }
 }
 
 function createControlGroup(buttons, extraClass = "") {
@@ -377,151 +400,227 @@ function createControlGroup(buttons, extraClass = "") {
   return group;
 }
 
-function createControlButton(label, action) {
+function createControlButton(label, action, key = "") {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "editor-action";
   button.dataset.editorControl = "true";
   button.dataset.action = action;
+
+  if (key) {
+    button.dataset.key = key;
+  }
+
   button.textContent = label;
   return button;
 }
 
-function finishInlineEdit(target) {
-  const normalized = target.textContent.replace(/\s+/g, " ").trim();
+function setEditableFields(container, isEnabled) {
+  getEditableTargets(container).forEach((target) => {
+    if (isEnabled) {
+      target.setAttribute("contenteditable", "plaintext-only");
+      target.setAttribute("spellcheck", "false");
+      return;
+    }
 
-  target.textContent = normalized || "내용 없음";
-  target.removeAttribute("contenteditable");
-  target.removeAttribute("spellcheck");
-  delete target.dataset.editorEditing;
+    target.removeAttribute("contenteditable");
+    target.removeAttribute("spellcheck");
+  });
 }
 
-function toggleTheme(root) {
-  const themeTag = root.querySelector('[data-role="theme-tag"]');
-  const themes = ["theme-blue", "theme-emerald", "theme-amber"];
-  const currentTheme = themes.find((theme) => root.classList.contains(theme)) ?? themes[0];
-  const nextTheme = themes[(themes.indexOf(currentTheme) + 1) % themes.length];
-
-  root.classList.remove(...themes);
-  root.classList.add(nextTheme);
-
-  if (themeTag) {
-    themeTag.textContent = nextTheme;
-  }
+function getEditableTargets(container) {
+  return Array.from(container.querySelectorAll(EDITABLE_SELECTOR));
 }
 
-function toggleReplaceTarget(root) {
-  const current = root.querySelector('[data-role="replace-target"]');
+function normalizeText(text) {
+  const normalized = (text ?? "").replace(/\s+/g, " ").trim();
+  return normalized || TEXT_FALLBACK;
+}
 
-  if (!current) {
+function toggleDraftTheme(vdom) {
+  const root = getSampleRoot(vdom);
+  const themeTag = findNodeByRole(vdom, "theme-tag");
+
+  if (!root) {
     return;
   }
 
-  if (current.tagName.toLowerCase() === "button") {
-    const link = document.createElement("a");
-    link.href = "#";
-    link.className = "sample-button sample-button--link";
-    link.dataset.role = "replace-target";
-    link.textContent = "link";
-    current.replaceWith(link);
+  const classNames = getClassNames(root);
+  const currentTheme = THEME_CLASSES.find((theme) => classNames.includes(theme)) ?? THEME_CLASSES[0];
+  const nextTheme = THEME_CLASSES[(THEME_CLASSES.indexOf(currentTheme) + 1) % THEME_CLASSES.length];
+  const nextClasses = classNames
+    .filter((className) => !THEME_CLASSES.includes(className))
+    .concat(nextTheme);
+
+  root.attrs.class = nextClasses.join(" ");
+  setNodeText(themeTag, nextTheme);
+}
+
+function toggleDraftReplaceTarget(vdom) {
+  const target = findNodeByRole(vdom, "replace-target");
+
+  if (!target) {
     return;
   }
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "sample-button";
-  button.dataset.role = "replace-target";
-  button.textContent = "button";
-  current.replaceWith(button);
+  if (target.tagName === "button") {
+    target.tagName = "a";
+    target.attrs = {
+      href: "#",
+      class: "sample-button sample-button--link",
+      "data-role": "replace-target",
+    };
+    setNodeText(target, "link");
+    return;
+  }
+
+  target.tagName = "button";
+  target.attrs = {
+    type: "button",
+    class: "sample-button",
+    "data-role": "replace-target",
+  };
+  setNodeText(target, "button");
 }
 
-function addListItem(root) {
-  const list = root.querySelector(".sample-list");
+function addDraftListItem(vdom) {
+  const list = findListNode(vdom);
 
   if (!list) {
     return;
   }
 
-  const item = document.createElement("li");
-  const key = createNextItemKey(list);
-
-  item.dataset.key = key;
-  item.innerHTML = `<strong class="sample-key">${key}</strong><span class="sample-value">새 항목</span>`;
-  list.append(item);
+  list.children.push(createListItemVdom(getNextItemKey(list)));
 }
 
-function createNextItemKey(list) {
-  const existingKeys = new Set(
-    Array.from(list.children).map((item) => item.getAttribute("data-key")).filter(Boolean),
-  );
-  const candidates = ["delta", "epsilon", "zeta", "eta", "theta"];
+function deleteDraftListItem(vdom, itemKey) {
+  const list = findListNode(vdom);
 
-  for (const candidate of candidates) {
-    if (!existingKeys.has(candidate)) {
-      return candidate;
+  if (!list) {
+    return;
+  }
+
+  list.children = list.children.filter((child) => getNodeKey(child) !== itemKey);
+}
+
+function moveDraftListItem(vdom, itemKey, direction) {
+  const list = findListNode(vdom);
+
+  if (!list) {
+    return;
+  }
+
+  const index = list.children.findIndex((child) => getNodeKey(child) === itemKey);
+
+  if (index === -1) {
+    return;
+  }
+
+  const nextIndex = index + direction;
+
+  if (nextIndex < 0 || nextIndex >= list.children.length) {
+    return;
+  }
+
+  const [movedItem] = list.children.splice(index, 1);
+  list.children.splice(nextIndex, 0, movedItem);
+}
+
+function createListItemVdom(itemKey) {
+  return {
+    type: "element",
+    tagName: "li",
+    attrs: { "data-key": itemKey },
+    children: [
+      {
+        type: "element",
+        tagName: "strong",
+        attrs: { class: "sample-key" },
+        children: [{ type: "text", value: itemKey }],
+      },
+      {
+        type: "element",
+        tagName: "span",
+        attrs: { class: "sample-value" },
+        children: [{ type: "text", value: "새 항목" }],
+      },
+    ],
+  };
+}
+
+function getNextItemKey(listNode) {
+  const existingKeys = new Set(listNode.children.map((child) => getNodeKey(child)).filter(Boolean));
+
+  for (const itemKey of ITEM_KEY_CANDIDATES) {
+    if (!existingKeys.has(itemKey)) {
+      return itemKey;
     }
   }
 
   return `item-${existingKeys.size + 1}`;
 }
 
-function moveListItem(item, direction) {
-  if (!item || !item.parentElement) {
+function getSampleRoot(vdom) {
+  return vdom.children?.[0] ?? null;
+}
+
+function findListNode(vdom) {
+  return findNodeByClass(vdom, "sample-list");
+}
+
+function findListItemByKey(vdom, itemKey) {
+  return findNode(vdom, (node) => getNodeKey(node) === itemKey);
+}
+
+function findNodeByRole(vdom, role) {
+  return findNode(vdom, (node) => node.attrs?.["data-role"] === role);
+}
+
+function findNodeByClass(vdom, className) {
+  return findNode(vdom, (node) => getClassNames(node).includes(className));
+}
+
+function findNode(node, predicate) {
+  if (!node) {
+    return null;
+  }
+
+  if (predicate(node)) {
+    return node;
+  }
+
+  for (const child of node.children ?? []) {
+    const match = findNode(child, predicate);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function getClassNames(node) {
+  return (node?.attrs?.class ?? "").split(/\s+/).filter(Boolean);
+}
+
+function setNodeText(node, text) {
+  if (!node) {
     return;
   }
 
-  if (direction < 0 && item.previousElementSibling) {
-    item.parentElement.insertBefore(item, item.previousElementSibling);
-    return;
-  }
-
-  if (direction > 0 && item.nextElementSibling) {
-    item.parentElement.insertBefore(item.nextElementSibling, item);
-  }
-}
-
-function setTestPreviewEditMode(container, isEnabled) {
-  getEditableTargets(container).forEach((target) => {
-    if (isEnabled) {
-      target.dataset.editorEditing = "true";
-      target.setAttribute("contenteditable", "plaintext-only");
-      target.setAttribute("spellcheck", "false");
-      return;
-    }
-
-    if (target.dataset.editorEditing === "true" || target.hasAttribute("contenteditable")) {
-      finishInlineEdit(target);
-      return;
-    }
-
-    clearInlineEditState(target);
-  });
-}
-
-function createDraftVdom(container) {
-  const snapshot = container.cloneNode(true);
-
-  getEditableTargets(snapshot).forEach((target) => {
-    clearInlineEditState(target);
-  });
-
-  return domToVdom(snapshot);
-}
-
-function getEditableTargets(container) {
-  return Array.from(container.querySelectorAll(EDITABLE_FIELD_SELECTOR));
-}
-
-function clearInlineEditState(target) {
-  target.removeAttribute("contenteditable");
-  target.removeAttribute("spellcheck");
-  delete target.dataset.editorEditing;
+  node.children = [{ type: "text", value: text }];
 }
 
 function syncEditModeButton(button, isEnabled) {
   button.textContent = isEnabled ? "편집 중" : "편집 모드";
-  button.classList.toggle("action-button--primary", isEnabled);
+  button.classList.toggle("action-button--edit-active", isEnabled);
   button.setAttribute("aria-pressed", String(isEnabled));
+}
+
+function clearHistoryInspection(elements, uiState) {
+  uiState.inspectedHistoryIndex = null;
+  syncHistoryInspection(elements, uiState.inspectedHistoryIndex);
 }
 
 function syncHistoryInspection(elements, inspectedIndex) {
@@ -531,14 +630,4 @@ function syncHistoryInspection(elements, inspectedIndex) {
   }
 
   delete elements.historyTrack.dataset.inspectingIndex;
-}
-
-function requiredElement(id) {
-  const element = document.getElementById(id);
-
-  if (!element) {
-    throw new Error(`Required element #${id} was not found.`);
-  }
-
-  return element;
 }

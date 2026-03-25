@@ -28,6 +28,7 @@ export function getElements() {
     patchButton: requiredElement("patch-button"),
     undoButton: requiredElement("undo-button"),
     redoButton: requiredElement("redo-button"),
+    editModeButton: requiredElement("edit-mode-button"),
     changeCount: requiredElement("change-count"),
     mutationCount: requiredElement("mutation-count"),
     historyPosition: requiredElement("history-position"),
@@ -70,8 +71,13 @@ export function renderTestPanel(elements, vdom) {
   renderVdom(elements.testPreview, vdom);
 }
 
-export function renderStatus(elements, store, isDirty, onHistoryNodeClick) {
-  const changes = store.getLastChanges();
+export function renderStatus(
+  elements,
+  store,
+  isDirty,
+  onHistoryNodeClick,
+  changes = store.getLastChanges(),
+) {
   const summary = summarizeChanges(changes);
   const historyMeta = store.getHistoryMeta();
 

@@ -15,7 +15,7 @@ export const sampleMarkup = `
   <header class="sample-hero">
     <p class="sample-label">Diff Cases</p>
     <h2 data-role="title">Patch only the changed nodes</h2>
-    <p data-role="description">각 요소의 수정 버튼으로 텍스트, 색상, 순서, 삭제를 직접 바꿔보세요.</p>
+    <p data-role="description">편집 모드를 켜고 텍스트를 직접 수정한 뒤 Patch를 눌러보세요.</p>
   </header>
 
   <ul class="sample-list">
