@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Virtual DOM & Diff Demo</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">Vanilla JavaScript Visualization</p>
+        <h1>Virtual DOM &amp; Diff</h1>
+      </header>
+
+      <section class="workspace" aria-label="Virtual DOM Demo Workspace">
+        <article class="panel">
+          <div class="panel-header">
+            <h2>실제 영역</h2>
+            <span>#real-area</span>
+          </div>
+          <div class="panel-body">
+            <div id="real-area" class="real-area">
+              <div class="card">
+                <h2>Virtual DOM Demo</h2>
+                <p>Edit this content in the test area and press Patch.</p>
+                <ul>
+                  <li>Item 1</li>
+                  <li>Item 2</li>
+                  <li>Item 3</li>
+                </ul>
+                <button>Click me</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <h2>테스트 영역</h2>
+            <span>CodeMirror #editor</span>
+          </div>
+          <div class="panel-body editor-panel">
+            <textarea id="editor" aria-label="HTML editor"></textarea>
+          </div>
+        </article>
+      </section>
+
+      <section class="controls" aria-label="History Controls">
+        <button id="undo-btn" type="button" disabled>← 뒤로가기</button>
+        <button id="patch-btn" type="button" class="primary">Patch</button>
+        <button id="redo-btn" type="button" disabled>앞으로가기 →</button>
+      </section>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="./vdom.js"></script>
+    <script src="./diff.js"></script>
+    <script src="./patch.js"></script>
+    <script src="./history.js"></script>
+    <script src="./main.js"></script>
+  </body>
+</html>
