@@ -59,6 +59,21 @@ export function createStore(initialVdom) {
       return history.snapshotAt(index);
     },
 
+    // 원하는 history 시점으로 바로 이동하고 actual/draft를 함께 맞춥니다.
+    jumpTo(index) {
+      const snapshot = history.jumpTo(index);
+
+      if (!snapshot) {
+        return null;
+      }
+
+      currentVdom = cloneVdom(snapshot.vdom);
+      draftVdom = cloneVdom(snapshot.vdom);
+      lastChanges = [];
+      lastMutationCount = 0;
+      return cloneSnapshot(snapshot);
+    },
+
     // 현재 draft를 실제 상태로 확정하고 history에 저장합니다.
     commitDraft(changes, mutationCount) {
       const previousVdom = cloneVdom(currentVdom);
@@ -184,6 +199,16 @@ export function createHistory(initialVdom) {
     // 원하는 위치의 snapshot 전체 정보를 읽습니다.
     snapshotAt(index) {
       return cloneSnapshot(entries[index] ?? null);
+    },
+
+    // history 커서를 원하는 위치로 옮기고 snapshot을 반환합니다.
+    jumpTo(index) {
+      if (!Number.isInteger(index) || index < 0 || index >= entries.length) {
+        return null;
+      }
+
+      cursor = index;
+      return cloneSnapshot(entries[cursor]);
     },
 
     // 더 뒤로 갈 수 있는지 확인합니다.

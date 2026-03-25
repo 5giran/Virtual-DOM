@@ -316,32 +316,37 @@ function syncDraftChange(elements, store, uiState, shouldRerenderTest) {
 }
 
 function createHistoryClickHandler(elements, store, uiState) {
-  // history 점을 클릭했을 때 해당 시점의 diff와 HTML 비교를 보여줍니다.
+  // history 점을 클릭했을 때 해당 시점으로 실제 상태를 이동합니다.
   return (index) => {
-    const snapshot = store.getSnapshotAt(index);
+    const currentVdom = store.getCurrentVdom();
+    const snapshot = store.jumpTo(index);
 
     if (!snapshot) {
       return;
     }
 
-    const currentIndex = store.getHistoryMeta().index;
+    patchDom(elements.actualPreview, currentVdom, snapshot.vdom);
+    renderActualSource(elements, snapshot.vdom);
+    renderTestDraft(elements, store, uiState.isEditModeEnabled);
 
-    if (index === currentIndex) {
-      clearHistoryInspection(elements, uiState);
-      renderLiveState(elements, store, uiState);
-      return;
-    }
-
-    uiState.inspectedHistoryIndex = index;
-    syncHistoryInspection(elements, uiState.inspectedHistoryIndex);
-    renderStatus(elements, store, uiState.isDirty, createHistoryClickHandler(elements, store, uiState), snapshot.changes);
+    uiState.isDirty = false;
+    clearHistoryInspection(elements, uiState);
+    renderStatus(
+      elements,
+      store,
+      uiState.isDirty,
+      createHistoryClickHandler(elements, store, uiState),
+      snapshot.changes,
+    );
     renderChangeList(elements, snapshot.changes);
+    renderDraftSource(elements, snapshot.vdom);
     renderHtmlComparison(elements, {
       beforeVdom: snapshot.previousVdom,
       afterVdom: snapshot.vdom,
       beforeLabel: `[${index + 1}] 이전 HTML`,
       afterLabel: `[${index + 1}] 변경 후 HTML`,
     });
+    renderHtmlEditorStatus(elements, `History ${index + 1}로 이동`, "idle");
   };
 }
 

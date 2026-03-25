@@ -268,6 +268,32 @@ const tests = [
     },
   },
   {
+    name: "store jumpTo moves current and draft to selected history entry",
+    run() {
+      // history 숫자 클릭처럼 특정 시점으로 이동했을 때 current/draft가 함께 그 시점 상태로 바뀌는지 검사합니다.
+      const initial = { type: "fragment", children: [{ type: "text", value: "start" }] };
+      const store = createStore(initial);
+
+      store.commit(
+        { type: "fragment", children: [{ type: "text", value: "one" }] },
+        [{ type: "UPDATE_TEXT", path: [0] }],
+        1,
+      );
+      store.commit(
+        { type: "fragment", children: [{ type: "text", value: "two" }] },
+        [{ type: "UPDATE_TEXT", path: [0] }],
+        1,
+      );
+
+      const snapshot = store.jumpTo(0);
+
+      assert(snapshot !== null, "jump target snapshot should exist");
+      assert(store.getHistoryMeta().index === 0, "history cursor should move to selected index");
+      assert(store.getCurrentVdom().children[0].value === "start", "current vdom should match jumped state");
+      assert(store.getDraftVdom().children[0].value === "start", "draft vdom should match jumped state");
+    },
+  },
+  {
     name: "serializeVdom escapes text and attribute HTML characters",
     run() {
       // 직렬화할 때 <, >, &, 따옴표 같은 문자가 안전하게 escape되는지 검사합니다.
