@@ -25,12 +25,14 @@ export const CHANGE_TYPES = {
 };
 
 export function diffTrees(oldVdom, newVdom) {
+  // 두 VDOM 전체를 비교해서 변경 목록 배열을 돌려줍니다.
   const changes = [];
   walk(oldVdom, newVdom, [], changes);
   return changes;
 }
 
 export function summarizeChanges(changes) {
+  // 변경 로그를 화면에 보여주기 쉽게 개수로 요약합니다.
   return changes.reduce(
     (summary, change) => {
       summary.total += 1;
@@ -42,10 +44,12 @@ export function summarizeChanges(changes) {
 }
 
 export function formatPath(path) {
+  // [0, 1, 2] 같은 경로를 사람이 읽기 쉬운 문자열로 바꿉니다.
   return path.length === 0 ? "root" : path.join(" > ");
 }
 
 function walk(oldNode, newNode, path, changes) {
+  // 노드 한 쌍을 비교하면서 변경 내용을 changes에 계속 쌓습니다.
   if (!oldNode && newNode) {
     changes.push({ type: CHANGE_TYPES.CREATE, path, nextNode: newNode });
     return;
@@ -93,6 +97,7 @@ function walk(oldNode, newNode, path, changes) {
 }
 
 function diffAttributes(oldAttrs, newAttrs, path, changes) {
+  // 같은 태그 안에서 속성만 무엇이 바뀌었는지 찾습니다.
   for (const [name, value] of Object.entries(newAttrs)) {
     if (oldAttrs[name] !== value) {
       changes.push({
@@ -118,6 +123,7 @@ function diffAttributes(oldAttrs, newAttrs, path, changes) {
 }
 
 function diffChildren(oldChildren, newChildren, parentPath, changes) {
+  // 자식 노드 비교를 맡고, 필요하면 keyed diff로 넘깁니다.
   if (supportsKeyedDiff(oldChildren, newChildren)) {
     diffKeyedChildren(oldChildren, newChildren, parentPath, changes);
     return;
@@ -131,6 +137,7 @@ function diffChildren(oldChildren, newChildren, parentPath, changes) {
 }
 
 function diffKeyedChildren(oldChildren, newChildren, parentPath, changes) {
+  // data-key를 기준으로 같은 리스트 항목을 추적하며 이동/추가/삭제를 찾습니다.
   const oldMap = new Map();
   const seenKeys = new Set();
 
@@ -181,6 +188,7 @@ function diffKeyedChildren(oldChildren, newChildren, parentPath, changes) {
 }
 
 function supportsKeyedDiff(oldChildren, newChildren) {
+  // 자식들이 모두 key를 가진 리스트라면 keyed diff를 쓸 수 있습니다.
   const nodes = [...oldChildren, ...newChildren].filter(Boolean);
 
   return nodes.length > 0 && nodes.every((node) => node.type === "element" && getNodeKey(node));

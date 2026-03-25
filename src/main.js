@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function bindToolbarEvents(elements, store, observer, uiState) {
+  // 상단 버튼(Patch / Undo / Redo / 편집 모드)의 동작을 한곳에서 묶습니다.
   elements.editModeButton.addEventListener("click", () => {
     uiState.isEditModeEnabled = !uiState.isEditModeEnabled;
     syncEditModeButton(elements.editModeButton, uiState.isEditModeEnabled);
@@ -154,6 +155,7 @@ function bindToolbarEvents(elements, store, observer, uiState) {
 }
 
 function bindTestPanelEvents(elements, store, uiState) {
+  // 테스트 영역 안에서 일어나는 클릭/입력 이벤트를 draftVdom 변경으로 연결합니다.
   elements.testPreview.addEventListener("click", (event) => {
     const control = event.target.closest("[data-editor-control][data-action]");
 
@@ -207,6 +209,7 @@ function bindTestPanelEvents(elements, store, uiState) {
 }
 
 function createInitialVdom(elements) {
+  // 처음 한 번만 샘플 HTML을 실제 DOM에 넣고 초기 VDOM을 만듭니다.
   elements.actualPreview.innerHTML = sanitizeHtml(sampleMarkup);
   const initialVdom = domToVdom(elements.actualPreview);
 
@@ -224,11 +227,13 @@ function createInitialVdom(elements) {
 }
 
 function renderTestDraft(elements, store, isEditModeEnabled) {
+  // 현재 draftVdom 상태를 테스트 영역에 다시 그립니다.
   renderTestPanel(elements, store.getDraftVdom());
   decorateTestPreview(elements, isEditModeEnabled);
 }
 
 function renderLiveState(elements, store, uiState, liveChanges = null) {
+  // 실제 상태와 테스트 상태를 비교해서 로그 / HTML 비교 / 메트릭을 갱신합니다.
   const currentVdom = store.getCurrentVdom();
   const draftVdom = store.getDraftVdom();
   const pendingChanges = liveChanges ?? diffTrees(currentVdom, draftVdom);
@@ -251,6 +256,7 @@ function renderLiveState(elements, store, uiState, liveChanges = null) {
 }
 
 function syncDraftChange(elements, store, uiState, shouldRerenderTest) {
+  // draftVdom이 바뀌었을 때 "수정 중" 상태와 미리보기 화면을 함께 갱신합니다.
   const liveChanges = diffTrees(store.getCurrentVdom(), store.getDraftVdom());
 
   uiState.isDirty = liveChanges.length > 0;
@@ -264,6 +270,7 @@ function syncDraftChange(elements, store, uiState, shouldRerenderTest) {
 }
 
 function createHistoryClickHandler(elements, store, uiState) {
+  // history 점을 클릭했을 때 해당 시점의 diff와 HTML 비교를 보여줍니다.
   return (index) => {
     const snapshot = store.getSnapshotAt(index);
 
@@ -293,12 +300,14 @@ function createHistoryClickHandler(elements, store, uiState) {
 }
 
 function updateDraftVdom(store, updater) {
+  // draftVdom을 꺼내 수정한 뒤 다시 store에 넣는 공통 헬퍼입니다.
   const nextDraft = store.getDraftVdom();
   updater(nextDraft);
   store.setDraftVdom(nextDraft);
 }
 
 function updateDraftTextFromTarget(store, target, useNormalizedText) {
+  // 사용자가 화면에서 수정한 텍스트를 draftVdom 안의 맞는 노드에 반영합니다.
   const nextDraft = store.getDraftVdom();
   const nextText = useNormalizedText ? normalizeText(target.textContent) : target.textContent ?? "";
   const role = target.dataset.role;
@@ -320,6 +329,7 @@ function updateDraftTextFromTarget(store, target, useNormalizedText) {
 }
 
 function runDraftAction(draftVdom, action, itemKey = "") {
+  // 버튼 종류에 따라 draftVdom 변경 함수를 골라 실행합니다.
   switch (action) {
     case "toggle-color":
       toggleDraftTheme(draftVdom);
@@ -344,6 +354,7 @@ function runDraftAction(draftVdom, action, itemKey = "") {
 }
 
 function decorateTestPreview(elements, isEditModeEnabled) {
+  // 테스트 영역에 편집 버튼을 붙이고, 필요한 곳만 수정 가능하게 만듭니다.
   const root = elements.testPreview.firstElementChild;
 
   if (!root) {
@@ -393,6 +404,7 @@ function decorateTestPreview(elements, isEditModeEnabled) {
 }
 
 function createControlGroup(buttons, extraClass = "") {
+  // 여러 편집 버튼을 한 묶음 UI로 만드는 작은 helper입니다.
   const group = document.createElement("div");
   group.className = `editor-controls ${extraClass}`.trim();
   group.dataset.editorControl = "true";
@@ -401,6 +413,7 @@ function createControlGroup(buttons, extraClass = "") {
 }
 
 function createControlButton(label, action, key = "") {
+  // 편집 버튼 하나를 만들고 어떤 액션인지 data 속성으로 기록합니다.
   const button = document.createElement("button");
   button.type = "button";
   button.className = "editor-action";
@@ -416,6 +429,7 @@ function createControlButton(label, action, key = "") {
 }
 
 function setEditableFields(container, isEnabled) {
+  // 편집 모드일 때만 제목/설명/항목 텍스트를 직접 수정할 수 있게 합니다.
   getEditableTargets(container).forEach((target) => {
     if (isEnabled) {
       target.setAttribute("contenteditable", "plaintext-only");
@@ -429,15 +443,18 @@ function setEditableFields(container, isEnabled) {
 }
 
 function getEditableTargets(container) {
+  // contenteditable을 붙일 대상 노드들을 한 번에 찾습니다.
   return Array.from(container.querySelectorAll(EDITABLE_SELECTOR));
 }
 
 function normalizeText(text) {
+  // 과한 공백을 정리해서 비교하기 쉬운 텍스트로 맞춥니다.
   const normalized = (text ?? "").replace(/\s+/g, " ").trim();
   return normalized || TEXT_FALLBACK;
 }
 
 function toggleDraftTheme(vdom) {
+  // sample-shell의 theme 클래스를 순서대로 바꿔 색상 변경 케이스를 만듭니다.
   const root = getSampleRoot(vdom);
   const themeTag = findNodeByRole(vdom, "theme-tag");
 
@@ -457,6 +474,7 @@ function toggleDraftTheme(vdom) {
 }
 
 function toggleDraftReplaceTarget(vdom) {
+  // button <-> a 태그를 바꿔 노드 교체(replace) 케이스를 만듭니다.
   const target = findNodeByRole(vdom, "replace-target");
 
   if (!target) {
@@ -484,6 +502,7 @@ function toggleDraftReplaceTarget(vdom) {
 }
 
 function addDraftListItem(vdom) {
+  // 리스트 끝에 새 항목을 추가해서 create 케이스를 만듭니다.
   const list = findListNode(vdom);
 
   if (!list) {
@@ -494,6 +513,7 @@ function addDraftListItem(vdom) {
 }
 
 function deleteDraftListItem(vdom, itemKey) {
+  // key로 항목을 찾아 리스트에서 제거합니다.
   const list = findListNode(vdom);
 
   if (!list) {
@@ -504,6 +524,7 @@ function deleteDraftListItem(vdom, itemKey) {
 }
 
 function moveDraftListItem(vdom, itemKey, direction) {
+  // 같은 항목을 위/아래로 옮겨 순서 변경 케이스를 만듭니다.
   const list = findListNode(vdom);
 
   if (!list) {
@@ -527,6 +548,7 @@ function moveDraftListItem(vdom, itemKey, direction) {
 }
 
 function createListItemVdom(itemKey) {
+  // 새로 추가할 리스트 항목의 기본 VDOM 모양입니다.
   return {
     type: "element",
     tagName: "li",
@@ -549,6 +571,7 @@ function createListItemVdom(itemKey) {
 }
 
 function getNextItemKey(listNode) {
+  // 이미 쓰지 않은 key를 골라 새 리스트 항목에 붙입니다.
   const existingKeys = new Set(listNode.children.map((child) => getNodeKey(child)).filter(Boolean));
 
   for (const itemKey of ITEM_KEY_CANDIDATES) {
@@ -561,26 +584,32 @@ function getNextItemKey(listNode) {
 }
 
 function getSampleRoot(vdom) {
+  // 데모 화면의 최상위 section 노드를 꺼냅니다.
   return vdom.children?.[0] ?? null;
 }
 
 function findListNode(vdom) {
+  // sample-list 클래스를 가진 ul 노드를 찾습니다.
   return findNodeByClass(vdom, "sample-list");
 }
 
 function findListItemByKey(vdom, itemKey) {
+  // data-key 값으로 특정 li 항목을 찾습니다.
   return findNode(vdom, (node) => getNodeKey(node) === itemKey);
 }
 
 function findNodeByRole(vdom, role) {
+  // data-role 값으로 제목, 설명 같은 고정 역할 노드를 찾습니다.
   return findNode(vdom, (node) => node.attrs?.["data-role"] === role);
 }
 
 function findNodeByClass(vdom, className) {
+  // class 이름으로 원하는 노드를 찾습니다.
   return findNode(vdom, (node) => getClassNames(node).includes(className));
 }
 
 function findNode(node, predicate) {
+  // VDOM 트리를 깊이 우선으로 돌면서 조건에 맞는 첫 노드를 찾습니다.
   if (!node) {
     return null;
   }
@@ -601,10 +630,12 @@ function findNode(node, predicate) {
 }
 
 function getClassNames(node) {
+  // class 문자열을 ["a", "b"] 같은 배열로 바꿉니다.
   return (node?.attrs?.class ?? "").split(/\s+/).filter(Boolean);
 }
 
 function setNodeText(node, text) {
+  // 노드 안 텍스트를 새 값 하나로 교체합니다.
   if (!node) {
     return;
   }
@@ -613,17 +644,20 @@ function setNodeText(node, text) {
 }
 
 function syncEditModeButton(button, isEnabled) {
+  // 편집 모드 버튼의 문구와 활성 상태를 맞춥니다.
   button.textContent = isEnabled ? "편집 중" : "편집 모드";
   button.classList.toggle("action-button--edit-active", isEnabled);
   button.setAttribute("aria-pressed", String(isEnabled));
 }
 
 function clearHistoryInspection(elements, uiState) {
+  // history 미리보기 모드를 해제하고 현재 상태 보기로 돌아갑니다.
   uiState.inspectedHistoryIndex = null;
   syncHistoryInspection(elements, uiState.inspectedHistoryIndex);
 }
 
 function syncHistoryInspection(elements, inspectedIndex) {
+  // history 트랙에 "지금 어떤 시점을 보고 있는지" 표시합니다.
   if (Number.isInteger(inspectedIndex)) {
     elements.historyTrack.dataset.inspectingIndex = String(inspectedIndex);
     return;

@@ -15,10 +15,12 @@
 import { createDomFromVdom, getNodeKey, syncAttributes } from "./vdom.js";
 
 export function patchDom(container, oldVdom, newVdom) {
+  // 실제 DOM 루트 아래 자식들을 old/new VDOM 기준으로 맞춥니다.
   reconcileChildren(container, oldVdom.children ?? [], newVdom.children ?? []);
 }
 
 function reconcileNode(parentDom, domNode, oldVNode, newVNode) {
+  // 노드 하나를 비교해서 생성/삭제/교체/수정 중 맞는 작업을 합니다.
   if (!oldVNode && newVNode) {
     const created = createDomFromVdom(newVNode);
     parentDom.append(created);
@@ -68,6 +70,7 @@ function reconcileNode(parentDom, domNode, oldVNode, newVNode) {
 }
 
 function reconcileChildren(parentDom, oldChildren, newChildren) {
+  // 자식 목록을 맞추면서 key가 있는 항목은 최대한 재사용합니다.
   const domChildren = Array.from(parentDom.childNodes);
   const keyedOldChildren = new Map();
   const unkeyedOldChildren = [];

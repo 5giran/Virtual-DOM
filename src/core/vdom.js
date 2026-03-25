@@ -47,6 +47,7 @@ const BOOLEAN_PROPERTY_MAP = {
 const BLOCKED_SELECTORS = "script, iframe, object, embed";
 
 export function cloneVdom(vnode) {
+  // VDOM을 복사해서 원본 상태가 함께 바뀌는 일을 막습니다.
   if (!vnode) {
     return null;
   }
@@ -55,6 +56,7 @@ export function cloneVdom(vnode) {
 }
 
 export function getNodeKey(vnode) {
+  // 리스트 항목 구분에 쓰는 key(data-key)를 꺼냅니다.
   if (!vnode || vnode.type !== "element") {
     return null;
   }
@@ -63,6 +65,7 @@ export function getNodeKey(vnode) {
 }
 
 export function sanitizeHtml(input) {
+  // 샘플 HTML에서 위험한 태그와 이벤트 속성을 제거합니다.
   const parser = new DOMParser();
   const doc = parser.parseFromString(input, "text/html");
 
@@ -80,6 +83,7 @@ export function sanitizeHtml(input) {
 }
 
 export function domToVdom(container) {
+  // 실제 DOM을 우리 프로젝트가 쓰는 VDOM 객체로 바꿉니다.
   return {
     type: "fragment",
     children: Array.from(container.childNodes)
@@ -89,6 +93,7 @@ export function domToVdom(container) {
 }
 
 export function createDomFromVdom(vnode) {
+  // VDOM 노드 하나를 실제 DOM 노드로 생성합니다.
   if (vnode.type === "fragment") {
     const fragment = document.createDocumentFragment();
 
@@ -116,10 +121,12 @@ export function createDomFromVdom(vnode) {
 }
 
 export function renderVdom(container, vnode) {
+  // 컨테이너 안 내용을 VDOM 기준으로 다시 렌더링합니다.
   container.replaceChildren(createDomFromVdom(vnode));
 }
 
 export function syncAttributes(element, oldAttrs = {}, newAttrs = {}) {
+  // 이전 속성과 새 속성을 비교해 필요한 속성만 바꿉니다.
   for (const name of Object.keys(oldAttrs)) {
     if (!(name in newAttrs)) {
       removeAttribute(element, name);
@@ -134,10 +141,12 @@ export function syncAttributes(element, oldAttrs = {}, newAttrs = {}) {
 }
 
 export function serializeVdom(vnode) {
+  // VDOM을 화면 아래 비교 패널에 보여줄 HTML 문자열로 바꿉니다.
   return stringifyNode(vnode, 0).trim();
 }
 
 function domNodeToVdom(node, parentNode) {
+  // DOM 노드 하나를 재귀적으로 읽어 VDOM 노드로 변환합니다.
   if (node.nodeType === Node.TEXT_NODE) {
     const value = node.textContent ?? "";
 
@@ -173,6 +182,7 @@ function domNodeToVdom(node, parentNode) {
 }
 
 function shouldKeepTextNode(value, parentNode) {
+  // 의미 없는 공백 텍스트는 버리고 필요한 텍스트만 남깁니다.
   if (!parentNode || parentNode.nodeType !== Node.ELEMENT_NODE) {
     return value.trim().length > 0;
   }
@@ -187,6 +197,7 @@ function shouldKeepTextNode(value, parentNode) {
 }
 
 function collectAttributes(element) {
+  // DOM 요소의 속성들을 attrs 객체로 모읍니다.
   const attrs = {};
 
   for (const name of element.getAttributeNames()) {
@@ -225,6 +236,7 @@ function collectAttributes(element) {
 }
 
 function setAttribute(element, name, value) {
+  // 속성 하나를 실제 DOM에 반영합니다.
   if (name === "value") {
     element.value = value ?? "";
     element.setAttribute(name, value ?? "");
@@ -257,6 +269,7 @@ function setAttribute(element, name, value) {
 }
 
 function removeAttribute(element, name) {
+  // 속성 하나를 실제 DOM에서 제거합니다.
   if (name === "value") {
     element.value = "";
   }
@@ -273,6 +286,7 @@ function removeAttribute(element, name) {
 }
 
 function stringifyNode(vnode, depth) {
+  // VDOM을 보기 좋은 HTML 문자열로 출력하는 내부 재귀 함수입니다.
   if (!vnode) {
     return "";
   }
@@ -317,14 +331,17 @@ function stringifyNode(vnode, depth) {
 }
 
 function hasOnlyTextChildren(vnode) {
+  // 자식이 전부 텍스트인지 검사해서 출력 방식을 고릅니다.
   return vnode.children.every((child) => child.type === "text");
 }
 
 function indent(depth) {
+  // 문자열 직렬화에 쓰는 들여쓰기 helper입니다.
   return "  ".repeat(depth);
 }
 
 function escapeHtml(value) {
+  // 텍스트 내용을 HTML 안전 문자열로 바꿉니다.
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -332,5 +349,6 @@ function escapeHtml(value) {
 }
 
 function escapeAttribute(value) {
+  // 속성값을 HTML 안전 문자열로 바꿉니다.
   return escapeHtml(value).replaceAll('"', "&quot;");
 }

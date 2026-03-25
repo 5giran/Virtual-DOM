@@ -17,6 +17,7 @@ import { CHANGE_TYPES, formatPath, summarizeChanges } from "../core/diff.js";
 import { renderVdom, serializeVdom } from "../core/vdom.js";
 
 export function getElements() {
+  // 화면에서 자주 쓰는 DOM 요소를 한 번에 찾아 모아둡니다.
   return {
     actualPreview: requiredElement("actual-preview"),
     actualSource: requiredElement("actual-source"),
@@ -39,6 +40,7 @@ export function getElements() {
 }
 
 export function createDomObserver(target) {
+  // 실제 DOM이 얼마나 바뀌었는지 세기 위한 MutationObserver wrapper입니다.
   const observer = new MutationObserver(() => {});
 
   observer.observe(target, {
@@ -60,14 +62,17 @@ export function createDomObserver(target) {
 }
 
 export function renderActualPreview(elements, vdom) {
+  // 실제 영역을 currentVdom 기준으로 렌더링합니다.
   renderVdom(elements.actualPreview, vdom);
 }
 
 export function renderActualSource(elements, vdom) {
+  // 현재 actual VDOM을 HTML 문자열로 보여줍니다.
   elements.actualSource.textContent = serializeVdom(vdom);
 }
 
 export function renderTestPanel(elements, vdom) {
+  // 테스트 영역을 draftVdom 기준으로 렌더링합니다.
   renderVdom(elements.testPreview, vdom);
 }
 
@@ -78,6 +83,7 @@ export function renderStatus(
   onHistoryNodeClick,
   changes = store.getLastChanges(),
 ) {
+  // 상단 메트릭, 버튼 비활성화, history 트랙 상태를 갱신합니다.
   const summary = summarizeChanges(changes);
   const historyMeta = store.getHistoryMeta();
 
@@ -92,6 +98,7 @@ export function renderStatus(
 }
 
 export function renderChangeList(elements, changes) {
+  // diff 결과를 사람이 읽기 쉬운 문장 리스트로 보여줍니다.
   const items = changes.length === 0 ? ["변경 없음"] : changes.map((change) => describeChange(change));
 
   elements.changeList.replaceChildren(
@@ -112,6 +119,7 @@ export function renderHtmlComparison(
     afterLabel = "현재 Test HTML",
   },
 ) {
+  // 이전/현재 HTML을 줄 단위로 비교해서 하이라이트 패널에 그립니다.
   elements.htmlBeforeLabel.textContent = beforeLabel;
   elements.htmlAfterLabel.textContent = afterLabel;
 
@@ -124,6 +132,7 @@ export function renderHtmlComparison(
 }
 
 function requiredElement(id) {
+  // 필수 DOM이 없으면 바로 에러를 내서 문제를 빨리 찾게 합니다.
   const element = document.getElementById(id);
 
   if (!element) {
@@ -134,6 +143,7 @@ function requiredElement(id) {
 }
 
 function renderHistoryTrack(container, currentIndex, size, onNodeClick) {
+  // history를 숫자 점 형태로 그리고 클릭 이벤트를 연결합니다.
   const inspectingIndex = Number.parseInt(container.dataset.inspectingIndex ?? "", 10);
 
   container.replaceChildren(
@@ -166,6 +176,7 @@ function renderHistoryTrack(container, currentIndex, size, onNodeClick) {
 }
 
 function describeChange(change) {
+  // change 객체 하나를 로그용 짧은 문장으로 바꿉니다.
   const path = formatPath(change.path);
 
   switch (change.type) {
@@ -189,6 +200,7 @@ function describeChange(change) {
 }
 
 function toLines(serialized) {
+  // HTML 문자열을 줄 배열로 바꿔 비교하기 쉽게 만듭니다.
   if (!serialized) {
     return [];
   }
@@ -197,6 +209,7 @@ function toLines(serialized) {
 }
 
 function diffSerializedLines(beforeLines, afterLines) {
+  // 두 HTML 문자열을 줄 기준으로 비교해서 추가/삭제/동일 상태를 구합니다.
   const beforeStates = Array(beforeLines.length).fill("removed");
   const afterStates = Array(afterLines.length).fill("added");
   const dp = Array.from({ length: beforeLines.length + 1 }, () =>
@@ -239,6 +252,7 @@ function diffSerializedLines(beforeLines, afterLines) {
 }
 
 function renderCodePane(container, lines, states) {
+  // 코드 비교 패널 한쪽(before 또는 after)을 실제 DOM으로 그립니다.
   if (lines.length === 0) {
     const empty = document.createElement("div");
     empty.className = "code-line code-line--empty";
