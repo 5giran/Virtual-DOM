@@ -60,6 +60,14 @@
         <button id="patch-btn" type="button" class="primary">Patch</button>
         <button id="redo-btn" type="button" disabled>앞으로가기 →</button>
       </section>
+
+      <section id="log-panel" class="log-panel" aria-label="DOM Log Panel">
+        <div class="log-panel-header">
+          <h2>📋 DOM 변화 로그</h2>
+          <button id="clear-log-btn" type="button">[초기화]</button>
+        </div>
+        <div id="log-list" class="log-list"></div>
+      </section>
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>

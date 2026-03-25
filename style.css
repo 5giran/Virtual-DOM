@@ -164,11 +164,14 @@ body {
 }
 
 .controls {
+  width: 100%;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
   margin-top: 24px;
+  padding-bottom: 28px;
 }
 
 .controls button {
@@ -205,11 +208,17 @@ body {
 }
 
 .patch-status {
-  min-width: 180px;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  min-width: max-content;
   color: #fbbf24;
   font-size: 0.9rem;
   font-weight: 700;
   opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translateX(-50%);
   transition: opacity 0.2s ease;
 }
 
@@ -223,6 +232,98 @@ body {
   transition: all 0.3s ease;
 }
 
+.log-panel {
+  margin-top: 24px;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(19, 35, 63, 0.42), rgba(8, 17, 31, 0.78)),
+    var(--surface);
+  overflow: hidden;
+}
+
+.log-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.log-panel-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.log-panel-header button {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.88);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 200px;
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.log-badge {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #eff6ff;
+}
+
+.log-badge--mutation {
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
+}
+
+.log-badge--reflow {
+  background: linear-gradient(135deg, #dc2626, #fb7185);
+}
+
+.log-badge--vdom {
+  background: linear-gradient(135deg, #16a34a, #4ade80);
+}
+
+.log-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-message {
+  color: var(--text);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.log-time {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 @media (max-width: 900px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -234,5 +335,10 @@ body {
 
   .controls button {
     width: 100%;
+  }
+
+  .log-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
