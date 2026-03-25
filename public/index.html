@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual DOM Diff Playground</title>
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="topbar">
+        <div class="topbar-title">
+          <p class="eyebrow">Virtual DOM / Diff</p>
+          <h1>구현 결과</h1>
+        </div>
+
+        <section class="toolbar control-bar">
+        <div class="toolbar-actions">
+          <button id="patch-button" class="action-button action-button--primary">
+            Patch
+          </button>
+          <button id="undo-button" class="action-button">뒤로가기</button>
+          <button id="redo-button" class="action-button">앞으로가기</button>
+        </div>
+
+          <div class="status-grid">
+            <article class="status-card">
+            <span class="status-label">변경 수</span>
+            <strong id="change-count">0</strong>
+            </article>
+            <article class="status-card">
+            <span class="status-label">실제 DOM Mutation</span>
+            <strong id="mutation-count">0</strong>
+            </article>
+            <article class="status-card">
+            <span class="status-label">테스트 상태</span>
+            <strong id="dirty-indicator">동기화됨</strong>
+            </article>
+          </div>
+        </section>
+      </header>
+
+      <section class="workspace-grid">
+        <article class="workspace-panel workspace-panel--actual">
+          <header class="workspace-head">
+            <div>
+              <p class="panel-kicker">실제 영역</p>
+              <h2>Actual DOM</h2>
+            </div>
+            <span class="panel-badge">Final Output</span>
+          </header>
+
+          <div id="actual-preview" class="preview-surface preview-surface--actual"></div>
+        </article>
+
+        <article class="workspace-panel workspace-panel--test">
+          <header class="workspace-head">
+            <div>
+              <p class="panel-kicker">테스트 영역</p>
+              <h2>Test DOM</h2>
+            </div>
+            <div class="toolbar-actions">
+              <span class="panel-badge panel-badge--warm">Editing State</span>
+              <button id="edit-mode-button" type="button" class="action-button" aria-pressed="false">
+                편집 모드
+              </button>
+            </div>
+          </header>
+
+          <div id="test-preview" class="preview-surface preview-surface--test"></div>
+        </article>
+      </section>
+
+      <section class="panel-card html-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">HTML 비교</p>
+            <h2>변경 추적용 HTML 패널</h2>
+          </div>
+          <span class="support-note">변경된 줄 강조</span>
+        </header>
+
+        <div class="html-compare-grid">
+          <section class="html-code-panel">
+            <header class="html-code-head">
+              <h3 id="html-before-label">현재 Actual HTML</h3>
+            </header>
+            <div id="html-before" class="code-compare" aria-live="polite"></div>
+          </section>
+
+          <section class="html-code-panel">
+            <header class="html-code-head">
+              <h3 id="html-after-label">현재 Test HTML</h3>
+            </header>
+            <div id="html-after" class="code-compare" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel-card panel-card--compact support-panel log-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">Diff 결과</p>
+            <h2>변경 로그</h2>
+          </div>
+        </header>
+        <ol id="change-list" class="change-list"></ol>
+      </section>
+
+      <section class="history-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">State History</p>
+            <h2>History</h2>
+          </div>
+          <strong id="history-position" class="history-position">1 / 1</strong>
+        </header>
+
+        <div id="history-track" class="history-track" aria-label="상태 이력"></div>
+      </section>
+
+      <pre id="actual-source" hidden></pre>
+    </main>
+
+    <script type="module" src="../src/main.js"></script>
+  </body>
+</html>
