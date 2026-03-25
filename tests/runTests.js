@@ -7,6 +7,7 @@ import { diffTrees } from "../src/core/diff.js";
 import { patchDom } from "../src/core/patch.js";
 import { domToVdom, htmlToVdom, serializeVdom } from "../src/core/vdom.js";
 import { createHistory } from "../src/state/store.js";
+import { validatePatchableHtml } from "../src/utils/htmlValidation.js";
 
 const results = [];
 
@@ -161,6 +162,22 @@ runTest("htmlToVdom follows browser auto-correction for malformed markup", () =>
 
   assert(html.includes("<li>one</li>"), "first list item should be auto-closed");
   assert(html.includes("<li>two</li>"), "second list item should remain");
+});
+
+runTest("HTML validation rejects list items without data-key", () => {
+  // 리스트 항목에서 data-key가 빠지면 HTML로 Patch를 막기 위해 invalid로 판단하는지 검사합니다.
+  const result = validatePatchableHtml(`<ul><li>A</li><li data-key="b">B</li></ul>`);
+
+  assert(result.isValid === false, "list item without data-key should be rejected");
+  assert(result.message.includes("data-key"), "error message should explain missing data-key");
+});
+
+runTest("HTML validation rejects empty data-key on list items", () => {
+  // data-key 속성이 있어도 값이 비어 있으면 유효한 key가 아니므로 invalid로 판단하는지 검사합니다.
+  const result = validatePatchableHtml(`<ul><li data-key="">A</li><li data-key="b">B</li></ul>`);
+
+  assert(result.isValid === false, "empty data-key should be rejected");
+  assert(result.message.includes("data-key"), "error message should explain invalid data-key");
 });
 
 runTest("domToVdom preserves whitespace inside textarea", () => {
