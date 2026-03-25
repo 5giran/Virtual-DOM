@@ -1,0 +1,9 @@
+{
+  "name": "virtual-dom-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "test:logic": "node tests/node-logic-tests.js"
+  }
+}

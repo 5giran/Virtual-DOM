@@ -8,16 +8,13 @@
   </head>
   <body>
     <main class="page-shell">
-      <section class="hero-card">
-        <p class="eyebrow">Vanilla JavaScript Playground</p>
-        <h1>Virtual DOM / Diff / Patch Demo</h1>
-        <p class="hero-copy">
-          브라우저 DOM을 Virtual DOM으로 변환하고, 두 트리의 차이를 찾아 실제 DOM에
-          최소한의 변경만 반영하는 과정을 한 번에 확인할 수 있는 실험 페이지입니다.
-        </p>
-      </section>
+      <header class="topbar">
+        <div class="topbar-title">
+          <p class="eyebrow">Virtual DOM / Diff</p>
+          <h1>구현 결과</h1>
+        </div>
 
-      <section class="toolbar">
+        <section class="toolbar control-bar">
         <div class="toolbar-actions">
           <button id="patch-button" class="action-button action-button--primary">
             Patch
@@ -26,115 +23,98 @@
           <button id="redo-button" class="action-button">앞으로가기</button>
         </div>
 
-        <div class="status-grid">
-          <article class="status-card">
+          <div class="status-grid">
+            <article class="status-card">
             <span class="status-label">변경 수</span>
             <strong id="change-count">0</strong>
-          </article>
-          <article class="status-card">
+            </article>
+            <article class="status-card">
             <span class="status-label">실제 DOM Mutation</span>
             <strong id="mutation-count">0</strong>
-          </article>
-          <article class="status-card">
-            <span class="status-label">History</span>
-            <strong id="history-position">1 / 1</strong>
-          </article>
-          <article class="status-card">
+            </article>
+            <article class="status-card">
             <span class="status-label">테스트 상태</span>
             <strong id="dirty-indicator">동기화됨</strong>
-          </article>
+            </article>
+          </div>
+        </section>
+      </header>
+
+      <section class="workspace-grid">
+        <article class="workspace-panel workspace-panel--actual">
+          <header class="workspace-head">
+            <div>
+              <p class="panel-kicker">실제 영역</p>
+              <h2>Actual DOM</h2>
+            </div>
+            <span class="panel-badge">Final Output</span>
+          </header>
+
+          <div id="actual-preview" class="preview-surface preview-surface--actual"></div>
+        </article>
+
+        <article class="workspace-panel workspace-panel--test">
+          <header class="workspace-head">
+            <div>
+              <p class="panel-kicker">테스트 영역</p>
+              <h2>Test DOM</h2>
+            </div>
+            <span class="panel-badge panel-badge--warm">Editing State</span>
+          </header>
+
+          <div id="test-preview" class="preview-surface preview-surface--test"></div>
+        </article>
+      </section>
+
+      <section class="panel-card html-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">HTML 비교</p>
+            <h2>변경 추적용 HTML 패널</h2>
+          </div>
+          <span class="support-note">변경된 줄 강조</span>
+        </header>
+
+        <div class="html-compare-grid">
+          <section class="html-code-panel">
+            <header class="html-code-head">
+              <h3 id="html-before-label">현재 Actual HTML</h3>
+            </header>
+            <div id="html-before" class="code-compare" aria-live="polite"></div>
+          </section>
+
+          <section class="html-code-panel">
+            <header class="html-code-head">
+              <h3 id="html-after-label">현재 Test HTML</h3>
+            </header>
+            <div id="html-after" class="code-compare" aria-live="polite"></div>
+          </section>
         </div>
       </section>
 
-      <section class="panel-grid">
-        <article class="panel-card">
-          <header class="panel-header">
-            <div>
-              <p class="panel-kicker">실제 영역</p>
-              <h2>Real DOM Surface</h2>
-            </div>
-            <span class="panel-badge">Patch Target</span>
-          </header>
-
-          <div class="panel-stack">
-            <section class="surface-card">
-              <div class="surface-title-row">
-                <h3>렌더링 결과</h3>
-                <span class="surface-note">Patch 버튼은 이 영역만 부분 갱신합니다.</span>
-              </div>
-              <div id="actual-preview" class="preview-surface"></div>
-            </section>
-
-            <section class="surface-card">
-              <div class="surface-title-row">
-                <h3>현재 HTML</h3>
-                <span class="surface-note">Virtual DOM 상태를 직렬화한 결과</span>
-              </div>
-              <pre id="actual-source" class="code-surface"></pre>
-            </section>
+      <section class="panel-card panel-card--compact support-panel log-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">Diff 결과</p>
+            <h2>변경 로그</h2>
           </div>
-        </article>
-
-        <article class="panel-card">
-          <header class="panel-header">
-            <div>
-              <p class="panel-kicker">테스트 영역</p>
-              <h2>Editable Sandbox</h2>
-            </div>
-            <span class="panel-badge panel-badge--warm">User Input</span>
-          </header>
-
-          <div class="panel-stack">
-            <section class="surface-card">
-              <div class="surface-title-row">
-                <h3>HTML 편집기</h3>
-                <span class="surface-note">자유롭게 태그를 추가/삭제/수정해 보세요.</span>
-              </div>
-              <textarea
-                id="test-source"
-                class="editor-surface"
-                spellcheck="false"
-                aria-label="테스트 영역 HTML 편집기"
-              ></textarea>
-            </section>
-
-            <section class="surface-card">
-              <div class="surface-title-row">
-                <h3>미리보기</h3>
-                <span class="surface-note">브라우저가 해석한 현재 테스트 DOM</span>
-              </div>
-              <div id="test-preview" class="preview-surface preview-surface--test"></div>
-            </section>
-          </div>
-        </article>
+        </header>
+        <ol id="change-list" class="change-list"></ol>
       </section>
 
-      <section class="inspector-grid">
-        <article class="panel-card panel-card--compact">
-          <header class="panel-header panel-header--compact">
-            <div>
-              <p class="panel-kicker">Diff 결과</p>
-              <h2>변경 로그</h2>
-            </div>
-          </header>
-          <ol id="change-list" class="change-list"></ol>
-        </article>
+      <section class="history-panel">
+        <header class="support-head">
+          <div>
+            <p class="panel-kicker">State History</p>
+            <h2>History</h2>
+          </div>
+          <strong id="history-position" class="history-position">1 / 1</strong>
+        </header>
 
-        <article class="panel-card panel-card--compact">
-          <header class="panel-header panel-header--compact">
-            <div>
-              <p class="panel-kicker">검증 포인트</p>
-              <h2>체크리스트</h2>
-            </div>
-          </header>
-          <ul class="check-list">
-            <li>텍스트 수정, 속성 추가/삭제, 노드 교체를 확인해 보세요.</li>
-            <li><code>data-key</code>가 있는 리스트 항목은 순서를 바꿔 보세요.</li>
-            <li>Patch 이후 실제 DOM mutation 개수가 얼마나 줄어드는지 보세요.</li>
-            <li>뒤로가기 / 앞으로가기 버튼으로 History 동기화를 확인하세요.</li>
-          </ul>
-        </article>
+        <div id="history-track" class="history-track" aria-label="상태 이력"></div>
       </section>
+
+      <pre id="actual-source" hidden></pre>
     </main>
 
     <script type="module" src="../src/main.js"></script>

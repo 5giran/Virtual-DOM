@@ -1,5 +1,28 @@
-import { CHANGE_TYPES } from "./changeTypes.js";
-import { getNodeKey } from "../../utils/nodeKey.js";
+/**
+ * 역할:
+ * - 이전 Virtual DOM과 새로운 Virtual DOM을 비교해서 변경 목록을 만듭니다.
+ * - 텍스트, 속성, 노드 추가/삭제/교체, keyed child 이동까지 한 파일에서 볼 수 있게 모아둡니다.
+ *
+ * 이 파일을 읽어야 하는 경우:
+ * - diff 알고리즘이 어떤 케이스를 감지하는지 빠르게 이해하고 싶을 때
+ * - 변경 로그가 어떤 기준으로 생성되는지 보고 싶을 때
+ *
+ * 관련 파일:
+ * - vdom.js: 비교 대상이 되는 Virtual DOM 구조를 만듭니다.
+ * - patch.js: 여기서 만든 차이를 실제 DOM 반영에 활용합니다.
+ */
+
+import { getNodeKey } from "./vdom.js";
+
+export const CHANGE_TYPES = {
+  CREATE: "CREATE_NODE",
+  REMOVE: "REMOVE_NODE",
+  REPLACE: "REPLACE_NODE",
+  UPDATE_TEXT: "UPDATE_TEXT",
+  SET_ATTRIBUTE: "SET_ATTRIBUTE",
+  REMOVE_ATTRIBUTE: "REMOVE_ATTRIBUTE",
+  MOVE_CHILD: "MOVE_CHILD",
+};
 
 export function diffTrees(oldVdom, newVdom) {
   const changes = [];
@@ -8,11 +31,14 @@ export function diffTrees(oldVdom, newVdom) {
 }
 
 export function summarizeChanges(changes) {
-  return changes.reduce((summary, change) => {
-    summary.total += 1;
-    summary.byType[change.type] = (summary.byType[change.type] ?? 0) + 1;
-    return summary;
-  }, { total: 0, byType: {} });
+  return changes.reduce(
+    (summary, change) => {
+      summary.total += 1;
+      summary.byType[change.type] = (summary.byType[change.type] ?? 0) + 1;
+      return summary;
+    },
+    { total: 0, byType: {} },
+  );
 }
 
 export function formatPath(path) {
@@ -157,8 +183,5 @@ function diffKeyedChildren(oldChildren, newChildren, parentPath, changes) {
 function supportsKeyedDiff(oldChildren, newChildren) {
   const nodes = [...oldChildren, ...newChildren].filter(Boolean);
 
-  return (
-    nodes.length > 0 &&
-    nodes.every((node) => node.type === "element" && getNodeKey(node))
-  );
+  return nodes.length > 0 && nodes.every((node) => node.type === "element" && getNodeKey(node));
 }

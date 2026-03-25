@@ -1,5 +1,18 @@
-import { createDomFromVdom, syncAttributes } from "../vdom/createDomFromVdom.js";
-import { getNodeKey } from "../../utils/nodeKey.js";
+/**
+ * 역할:
+ * - 이전 Virtual DOM과 새로운 Virtual DOM을 바탕으로 실제 DOM을 부분 갱신합니다.
+ * - diff 결과를 다시 직접 읽지 않아도 되도록, 실제 반영 로직을 한 파일에서 따라갈 수 있게 둡니다.
+ *
+ * 이 파일을 읽어야 하는 경우:
+ * - Patch 버튼을 눌렀을 때 실제 DOM이 어떻게 바뀌는지 보고 싶을 때
+ * - keyed child 재사용과 이동 로직을 이해하고 싶을 때
+ *
+ * 관련 파일:
+ * - vdom.js: DOM 생성, 속성 동기화, key 추출 기능을 제공합니다.
+ * - diff.js: 어떤 차이가 생겼는지 계산합니다.
+ */
+
+import { createDomFromVdom, getNodeKey, syncAttributes } from "./vdom.js";
 
 export function patchDom(container, oldVdom, newVdom) {
   reconcileChildren(container, oldVdom.children ?? [], newVdom.children ?? []);

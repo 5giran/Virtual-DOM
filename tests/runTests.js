@@ -1,7 +1,12 @@
-import { diffTrees } from "../src/core/diff/diffTrees.js";
-import { createHistory } from "../src/core/history/createHistory.js";
-import { patchDom } from "../src/core/patch/reconcileDom.js";
-import { domToVdom } from "../src/core/vdom/domToVdom.js";
+/**
+ * 역할:
+ * - 브라우저 페이지에서 바로 돌려볼 수 있는 간단한 통합 테스트입니다.
+ */
+
+import { diffTrees } from "../src/core/diff.js";
+import { patchDom } from "../src/core/patch.js";
+import { domToVdom } from "../src/core/vdom.js";
+import { createHistory } from "../src/state/store.js";
 
 const results = [];
 
