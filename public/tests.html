@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual DOM Tests</title>
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body>
+    <main class="page-shell page-shell--tests">
+      <section class="hero-card">
+        <p class="eyebrow">Browser Test Runner</p>
+        <h1>Virtual DOM Verification</h1>
+        <p class="hero-copy">
+          DOM → Virtual DOM 변환, diff 계산, patch 적용, history 이동까지 브라우저에서
+          직접 검증하는 간단한 테스트 페이지입니다.
+        </p>
+      </section>
+
+      <section class="panel-card">
+        <header class="panel-header">
+          <div>
+            <p class="panel-kicker">결과</p>
+            <h2>테스트 로그</h2>
+          </div>
+          <span id="test-summary" class="panel-badge">실행 전</span>
+        </header>
+        <ol id="test-results" class="change-list"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="../tests/runTests.js"></script>
+  </body>
+</html>
