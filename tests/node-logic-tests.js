@@ -4,7 +4,7 @@
  */
 
 import { diffTrees } from "../src/core/diff.js";
-import { createHistory } from "../src/state/store.js";
+import { createHistory, createStore } from "../src/state/store.js";
 import { serializeVdom } from "../src/core/vdom.js";
 
 const tests = [
@@ -97,6 +97,25 @@ const tests = [
 
       assert(history.size() === 3, "future entries should be truncated");
       assert(history.canRedo() === false, "redo should be unavailable after new push");
+    },
+  },
+  {
+    name: "store snapshots preserve previous vdom and change metadata",
+    run() {
+      const initial = { type: "fragment", children: [] };
+      const next = { type: "fragment", children: [{ type: "text", value: "next" }] };
+      const changes = [{ type: "CREATE", path: [0] }];
+      const store = createStore(initial);
+
+      store.commit(next, changes, 2);
+
+      const snapshot = store.getSnapshotAt(1);
+
+      assert(snapshot !== null, "snapshot should exist");
+      assert(snapshot.previousVdom.children.length === 0, "snapshot should store previous vdom");
+      assert(snapshot.vdom.children[0].value === "next", "snapshot should store current vdom");
+      assert(snapshot.changes.length === 1, "snapshot should store changes");
+      assert(snapshot.mutationCount === 2, "snapshot should store mutation count");
     },
   },
   {

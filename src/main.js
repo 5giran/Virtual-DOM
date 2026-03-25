@@ -32,33 +32,54 @@ import {
 import { createStore } from "./state/store.js";
 import { sampleMarkup } from "./sampleMarkup.js";
 
+const EDITABLE_FIELD_SELECTOR = ['[data-role="title"]', '[data-role="description"]', ".sample-value"].join(
+  ", ",
+);
+
 document.addEventListener("DOMContentLoaded", () => {
   const elements = getElements();
+  const editModeButton = requiredElement("edit-mode-button");
   const initialVdom = createInitialVdom(elements);
   const store = createStore(initialVdom);
   const observer = createDomObserver(elements.actualPreview);
   let isDirty = false;
+  let isEditModeEnabled = false;
+  let inspectedHistoryIndex = null;
 
-  setupTestPreviewEditor(elements, store, () => {
-    isDirty = true;
-    renderStatus(elements, store, isDirty);
-  });
-  decorateTestPreview(elements);
+  setupTestPreviewEditor(
+    elements,
+    store,
+    () => {
+      isDirty = true;
+      clearHistoryInspection();
+      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
+    },
+    () => isEditModeEnabled,
+  );
+  syncEditModeButton(editModeButton, isEditModeEnabled);
+  decorateTestPreview(elements, isEditModeEnabled);
 
   observer.flush();
-  renderStatus(elements, store, isDirty);
+  renderStatus(elements, store, isDirty, handleHistoryNodeClick);
   renderChangeList(elements, store.getLastChanges());
   syncDraftPanels(elements, store);
 
+  editModeButton.addEventListener("click", () => {
+    isEditModeEnabled = !isEditModeEnabled;
+    syncEditModeButton(editModeButton, isEditModeEnabled);
+    decorateTestPreview(elements, isEditModeEnabled);
+  });
+
   elements.patchButton.addEventListener("click", () => {
-    const nextVdom = domToVdom(elements.testPreview);
+    const nextVdom = createDraftVdom(elements.testPreview);
     const previousVdom = store.getCurrentVdom();
     const changes = diffTrees(previousVdom, nextVdom);
 
     if (changes.length === 0) {
       store.inspect([], 0);
       isDirty = false;
-      renderStatus(elements, store, isDirty);
+      clearHistoryInspection();
+      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
       renderChangeList(elements, []);
       renderHtmlComparison(elements, {
         beforeVdom: previousVdom,
@@ -75,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
     store.commit(nextVdom, changes, mutationCount);
     renderActualSource(elements, nextVdom);
     renderTestPanel(elements, nextVdom);
-    decorateTestPreview(elements);
+    decorateTestPreview(elements, isEditModeEnabled);
     renderHtmlComparison(elements, {
       beforeVdom: previousVdom,
       afterVdom: nextVdom,
@@ -84,7 +105,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     isDirty = false;
-    renderStatus(elements, store, isDirty);
+    clearHistoryInspection();
+    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
     renderChangeList(elements, changes);
   });
 
@@ -102,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
     store.inspect(changes, mutationCount);
     renderActualSource(elements, previousState);
     renderTestPanel(elements, previousState);
-    decorateTestPreview(elements);
+    decorateTestPreview(elements, isEditModeEnabled);
     renderHtmlComparison(elements, {
       beforeVdom: currentState,
       afterVdom: previousState,
@@ -111,7 +133,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     isDirty = false;
-    renderStatus(elements, store, isDirty);
+    clearHistoryInspection();
+    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
     renderChangeList(elements, changes);
   });
 
@@ -129,7 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
     store.inspect(changes, mutationCount);
     renderActualSource(elements, nextState);
     renderTestPanel(elements, nextState);
-    decorateTestPreview(elements);
+    decorateTestPreview(elements, isEditModeEnabled);
     renderHtmlComparison(elements, {
       beforeVdom: currentState,
       afterVdom: nextState,
@@ -138,9 +161,49 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     isDirty = false;
-    renderStatus(elements, store, isDirty);
+    clearHistoryInspection();
+    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
     renderChangeList(elements, changes);
   });
+
+  function handleHistoryNodeClick(index) {
+    const snapshot = store.getSnapshotAt(index);
+
+    if (!snapshot) {
+      return;
+    }
+
+    const historyMeta = store.getHistoryMeta();
+
+    if (index === historyMeta.index) {
+      clearHistoryInspection();
+      renderStatus(elements, store, isDirty, handleHistoryNodeClick);
+      renderChangeList(elements, store.getLastChanges());
+      renderHtmlComparison(elements, {
+        beforeVdom: snapshot.previousVdom,
+        afterVdom: snapshot.vdom,
+        beforeLabel: "현재 Actual HTML",
+        afterLabel: "현재 Test HTML",
+      });
+      return;
+    }
+
+    inspectedHistoryIndex = index;
+    syncHistoryInspection(elements, inspectedHistoryIndex);
+    renderStatus(elements, store, isDirty, handleHistoryNodeClick);
+    renderChangeList(elements, snapshot.changes);
+    renderHtmlComparison(elements, {
+      beforeVdom: snapshot.previousVdom,
+      afterVdom: snapshot.vdom,
+      beforeLabel: `[${index + 1}] 이전 HTML`,
+      afterLabel: `[${index + 1}] 변경 후 HTML`,
+    });
+  }
+
+  function clearHistoryInspection() {
+    inspectedHistoryIndex = null;
+    syncHistoryInspection(elements, inspectedHistoryIndex);
+  }
 });
 
 function createInitialVdom(elements) {
@@ -160,7 +223,7 @@ function createInitialVdom(elements) {
   return initialVdom;
 }
 
-function setupTestPreviewEditor(elements, store, onDirty) {
+function setupTestPreviewEditor(elements, store, onDirty, getEditMode) {
   elements.testPreview.addEventListener("click", (event) => {
     const control = event.target.closest("[data-editor-control][data-action]");
 
@@ -171,7 +234,7 @@ function setupTestPreviewEditor(elements, store, onDirty) {
     event.preventDefault();
 
     withDraftRoot(elements.testPreview, (root) => {
-      handleEditorAction(root, control.dataset.action, control, elements, store, onDirty);
+      handleEditorAction(root, control.dataset.action, control, elements, store, onDirty, getEditMode);
     });
   });
 
@@ -202,6 +265,9 @@ function setupTestPreviewEditor(elements, store, onDirty) {
       }
 
       finishInlineEdit(target);
+      if (getEditMode()) {
+        setTestPreviewEditMode(elements.testPreview, true);
+      }
       syncDraftPanels(elements, store);
       onDirty();
     },
@@ -209,14 +275,8 @@ function setupTestPreviewEditor(elements, store, onDirty) {
   );
 }
 
-function handleEditorAction(root, action, control, elements, store, onDirty) {
+function handleEditorAction(root, action, control, elements, store, onDirty, getEditMode) {
   switch (action) {
-    case "edit-title":
-      startInlineEdit(root.querySelector('[data-role="title"]'));
-      return;
-    case "edit-description":
-      startInlineEdit(root.querySelector('[data-role="description"]'));
-      return;
     case "toggle-color":
       toggleTheme(root);
       break;
@@ -226,9 +286,6 @@ function handleEditorAction(root, action, control, elements, store, onDirty) {
     case "add-item":
       addListItem(root);
       break;
-    case "edit-item":
-      startInlineEdit(control.closest("li")?.querySelector(".sample-value"));
-      return;
     case "delete-item":
       control.closest("li")?.remove();
       break;
@@ -242,7 +299,7 @@ function handleEditorAction(root, action, control, elements, store, onDirty) {
       return;
   }
 
-  decorateTestPreview(elements);
+  decorateTestPreview(elements, getEditMode());
   syncDraftPanels(elements, store);
   onDirty();
 }
@@ -257,21 +314,15 @@ function withDraftRoot(container, callback) {
   callback(root);
 }
 
-function decorateTestPreview(elements) {
+function decorateTestPreview(elements, isEditModeEnabled = false) {
   withDraftRoot(elements.testPreview, (root) => {
     root.querySelectorAll("[data-editor-control]").forEach((node) => node.remove());
 
-    const hero = root.querySelector(".sample-hero");
     const list = root.querySelector(".sample-list");
     const row = root.querySelector(".sample-row");
 
-    if (hero) {
-      hero.append(
-        createControlGroup([
-          createControlButton("제목 수정", "edit-title"),
-          createControlButton("설명 수정", "edit-description"),
-        ]),
-      );
+    if (!isEditModeEnabled) {
+      return;
     }
 
     if (row) {
@@ -288,7 +339,6 @@ function decorateTestPreview(elements) {
         item.append(
           createControlGroup(
             [
-              createControlButton("수정", "edit-item"),
               createControlButton("삭제", "delete-item"),
               createControlButton("위로", "move-up"),
               createControlButton("아래로", "move-down"),
@@ -303,11 +353,13 @@ function decorateTestPreview(elements) {
       );
     }
   });
+
+  setTestPreviewEditMode(elements.testPreview, isEditModeEnabled);
 }
 
 function syncDraftPanels(elements, store) {
   const currentVdom = store.getCurrentVdom();
-  const draftVdom = domToVdom(elements.testPreview);
+  const draftVdom = createDraftVdom(elements.testPreview);
 
   renderHtmlComparison(elements, {
     beforeVdom: currentVdom,
@@ -335,23 +387,6 @@ function createControlButton(label, action) {
   return button;
 }
 
-function startInlineEdit(target) {
-  if (!target) {
-    return;
-  }
-
-  if (target.dataset.editorEditing === "true") {
-    target.focus();
-    return;
-  }
-
-  target.dataset.editorEditing = "true";
-  target.setAttribute("contenteditable", "plaintext-only");
-  target.setAttribute("spellcheck", "false");
-  target.focus();
-  placeCaretAtEnd(target);
-}
-
 function finishInlineEdit(target) {
   const normalized = target.textContent.replace(/\s+/g, " ").trim();
 
@@ -359,16 +394,6 @@ function finishInlineEdit(target) {
   target.removeAttribute("contenteditable");
   target.removeAttribute("spellcheck");
   delete target.dataset.editorEditing;
-}
-
-function placeCaretAtEnd(target) {
-  const selection = window.getSelection();
-  const range = document.createRange();
-
-  range.selectNodeContents(target);
-  range.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(range);
 }
 
 function toggleTheme(root) {
@@ -453,4 +478,67 @@ function moveListItem(item, direction) {
   if (direction > 0 && item.nextElementSibling) {
     item.parentElement.insertBefore(item.nextElementSibling, item);
   }
+}
+
+function setTestPreviewEditMode(container, isEnabled) {
+  getEditableTargets(container).forEach((target) => {
+    if (isEnabled) {
+      target.dataset.editorEditing = "true";
+      target.setAttribute("contenteditable", "plaintext-only");
+      target.setAttribute("spellcheck", "false");
+      return;
+    }
+
+    if (target.dataset.editorEditing === "true" || target.hasAttribute("contenteditable")) {
+      finishInlineEdit(target);
+      return;
+    }
+
+    clearInlineEditState(target);
+  });
+}
+
+function createDraftVdom(container) {
+  const snapshot = container.cloneNode(true);
+
+  getEditableTargets(snapshot).forEach((target) => {
+    clearInlineEditState(target);
+  });
+
+  return domToVdom(snapshot);
+}
+
+function getEditableTargets(container) {
+  return Array.from(container.querySelectorAll(EDITABLE_FIELD_SELECTOR));
+}
+
+function clearInlineEditState(target) {
+  target.removeAttribute("contenteditable");
+  target.removeAttribute("spellcheck");
+  delete target.dataset.editorEditing;
+}
+
+function syncEditModeButton(button, isEnabled) {
+  button.textContent = isEnabled ? "편집 중" : "편집 모드";
+  button.classList.toggle("action-button--primary", isEnabled);
+  button.setAttribute("aria-pressed", String(isEnabled));
+}
+
+function syncHistoryInspection(elements, inspectedIndex) {
+  if (Number.isInteger(inspectedIndex)) {
+    elements.historyTrack.dataset.inspectingIndex = String(inspectedIndex);
+    return;
+  }
+
+  delete elements.historyTrack.dataset.inspectingIndex;
+}
+
+function requiredElement(id) {
+  const element = document.getElementById(id);
+
+  if (!element) {
+    throw new Error(`Required element #${id} was not found.`);
+  }
+
+  return element;
 }

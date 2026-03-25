@@ -70,7 +70,7 @@ export function renderTestPanel(elements, vdom) {
   renderVdom(elements.testPreview, vdom);
 }
 
-export function renderStatus(elements, store, isDirty) {
+export function renderStatus(elements, store, isDirty, onHistoryNodeClick) {
   const changes = store.getLastChanges();
   const summary = summarizeChanges(changes);
   const historyMeta = store.getHistoryMeta();
@@ -79,7 +79,7 @@ export function renderStatus(elements, store, isDirty) {
   elements.mutationCount.textContent = String(store.getLastMutationCount());
   elements.historyPosition.textContent = `${historyMeta.index + 1} / ${historyMeta.size}`;
   elements.dirtyIndicator.textContent = isDirty ? "수정 중" : "동기화됨";
-  renderHistoryTrack(elements.historyTrack, historyMeta.index, historyMeta.size);
+  renderHistoryTrack(elements.historyTrack, historyMeta.index, historyMeta.size, onHistoryNodeClick);
 
   elements.undoButton.disabled = !store.canUndo();
   elements.redoButton.disabled = !store.canRedo();
@@ -127,7 +127,9 @@ function requiredElement(id) {
   return element;
 }
 
-function renderHistoryTrack(container, currentIndex, size) {
+function renderHistoryTrack(container, currentIndex, size, onNodeClick) {
+  const inspectingIndex = Number.parseInt(container.dataset.inspectingIndex ?? "", 10);
+
   container.replaceChildren(
     ...Array.from({ length: size }, (_, index) => {
       const item = document.createElement("span");
@@ -140,6 +142,16 @@ function renderHistoryTrack(container, currentIndex, size) {
         item.dataset.state = "current";
       } else {
         item.dataset.state = "future";
+      }
+
+      if (Number.isInteger(inspectingIndex) && inspectingIndex === index && index !== currentIndex) {
+        item.dataset.inspecting = "true";
+      }
+
+      if (typeof onNodeClick === "function") {
+        item.addEventListener("click", () => {
+          onNodeClick(index);
+        });
       }
 
       return item;

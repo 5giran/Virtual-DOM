@@ -33,9 +33,19 @@ export function createStore(initialVdom) {
       return lastMutationCount;
     },
 
+    getSnapshotAt(index) {
+      return history.snapshotAt(index);
+    },
+
     commit(nextVdom, changes, mutationCount) {
+      const previousVdom = cloneVdom(currentVdom);
       currentVdom = cloneVdom(nextVdom);
-      history.push(currentVdom);
+      history.push({
+        vdom: currentVdom,
+        previousVdom,
+        changes,
+        mutationCount,
+      });
       lastChanges = [...changes];
       lastMutationCount = mutationCount;
     },
@@ -89,13 +99,16 @@ export function createStore(initialVdom) {
 }
 
 export function createHistory(initialVdom) {
-  let entries = [cloneVdom(initialVdom)];
+  let entries = [createSnapshot(initialVdom)];
   let cursor = 0;
 
   return {
-    push(nextVdom) {
+    push(nextEntry) {
       entries = entries.slice(0, cursor + 1);
-      entries.push(cloneVdom(nextVdom));
+      const previousSnapshot = entries[cursor] ?? null;
+      const snapshot = toSnapshot(nextEntry, previousSnapshot?.vdom ?? null);
+
+      entries.push(snapshot);
       cursor = entries.length - 1;
     },
 
@@ -105,7 +118,7 @@ export function createHistory(initialVdom) {
       }
 
       cursor -= 1;
-      return cloneVdom(entries[cursor]);
+      return cloneVdom(entries[cursor].vdom);
     },
 
     redo() {
@@ -114,11 +127,15 @@ export function createHistory(initialVdom) {
       }
 
       cursor += 1;
-      return cloneVdom(entries[cursor]);
+      return cloneVdom(entries[cursor].vdom);
     },
 
     current() {
-      return cloneVdom(entries[cursor]);
+      return cloneVdom(entries[cursor].vdom);
+    },
+
+    snapshotAt(index) {
+      return cloneSnapshot(entries[index] ?? null);
     },
 
     canUndo() {
@@ -137,4 +154,47 @@ export function createHistory(initialVdom) {
       return cursor;
     },
   };
+}
+
+function createSnapshot(vdom, previousVdom = vdom, changes = [], mutationCount = 0) {
+  return {
+    vdom: cloneVdom(vdom),
+    previousVdom: cloneVdom(previousVdom ?? vdom),
+    changes: cloneChanges(changes),
+    mutationCount,
+  };
+}
+
+function toSnapshot(entry, previousVdom) {
+  if (isSnapshotEntry(entry)) {
+    return createSnapshot(
+      entry.vdom,
+      entry.previousVdom ?? previousVdom ?? entry.vdom,
+      entry.changes ?? [],
+      entry.mutationCount ?? 0,
+    );
+  }
+
+  return createSnapshot(entry, previousVdom ?? entry);
+}
+
+function isSnapshotEntry(entry) {
+  return Boolean(entry && typeof entry === "object" && "vdom" in entry);
+}
+
+function cloneSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    vdom: cloneVdom(snapshot.vdom),
+    previousVdom: cloneVdom(snapshot.previousVdom),
+    changes: cloneChanges(snapshot.changes),
+    mutationCount: snapshot.mutationCount,
+  };
+}
+
+function cloneChanges(changes = []) {
+  return JSON.parse(JSON.stringify(changes));
 }
